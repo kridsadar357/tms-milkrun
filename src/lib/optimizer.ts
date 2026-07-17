@@ -12,7 +12,7 @@
  * Distances use haversine × 1.3; the Planner can re-snap to Mapbox roads after.
  */
 
-import type { DeliveryLocation, PlannedRoute, PlanResult, RouteStop, Truck } from '../types'
+import type { DeliveryLocation, OptimizeObjective, PlannedRoute, PlanResult, RouteStop, Truck } from '../types'
 import { roadKm, type LatLng } from './geo'
 
 interface TripSlot {
@@ -31,6 +31,8 @@ export interface PlanInput {
   dayOfWeek?: number
   /** Depot departure clock 'HH:MM' (default 08:00) — the basis for time windows. */
   planStartTime?: string
+  /** What to minimize: 'cost' (cheapest ฿, default), 'distance' (km), or 'balanced'. */
+  objective?: OptimizeObjective
 }
 
 /** A location is served on a day if it has no schedule, or lists that weekday. */
@@ -78,6 +80,7 @@ export function planRoutes({
   lockedRoutes = [],
   dayOfWeek,
   planStartTime = '08:00',
+  objective = 'cost',
 }: PlanInput): PlanResult {
   const startMin = hmToMin(planStartTime)
   // Locked routes hold their stops and their truck/round slot.
@@ -137,7 +140,7 @@ export function planRoutes({
   // out load, escaping local optima, and reinsert any unassigned stops that now
   // fit — all while keeping capacity + time windows feasible.
   const unassignedLocs = [...remaining].map((id) => byId.get(id)).filter((l): l is DeliveryLocation => !!l)
-  solve(parts, unassignedLocs, depot, avgSpeedKmh, startMin)
+  solve(parts, unassignedLocs, depot, avgSpeedKmh, startMin, objective)
   remaining.clear()
   unassignedLocs.forEach((l) => remaining.add(l.id))
 
@@ -208,13 +211,26 @@ function bestInsertion(
   return best
 }
 
-/** Full cost of one route: fixed cost/round + cost/km × road distance (0 if empty). */
-const partCost = (truck: Truck, locs: DeliveryLocation[], depot: LatLng) =>
-  locs.length === 0 ? 0 : truck.fixedCostPerRound + truck.costPerKm * routeDist(locs, depot)
+/**
+ * Objective score of one route (lower is better; 0 if empty). What the solver
+ * minimizes depends on the chosen objective:
+ *  - 'cost'     — fixed cost/round + cost/km × road distance (cheapest ฿ delivery)
+ *  - 'distance' — total road distance only (fewest km, cost-agnostic)
+ *  - 'balanced' — cost, penalized for high utilization so load spreads evenly
+ */
+const routeScore = (truck: Truck, locs: DeliveryLocation[], depot: LatLng, obj: OptimizeObjective) => {
+  if (locs.length === 0) return 0
+  const dist = routeDist(locs, depot)
+  if (obj === 'distance') return dist
+  const cost = truck.fixedCostPerRound + truck.costPerKm * dist
+  if (obj === 'cost') return cost
+  const util = Math.max(loadM3(locs) / truck.capacityM3, loadKg(locs) / truck.capacityKg)
+  return cost * (1 + 0.6 * util * util) // balanced: discourage piling onto one truck
+}
 
-/** Total cost of a whole solution (only non-empty routes are charged). */
-const solutionCost = (parts: DynPart[], depot: LatLng) =>
-  parts.reduce((sum, p) => sum + partCost(p.truck, p.locs, depot), 0)
+/** Total objective score of a whole solution (only non-empty routes count). */
+const solutionCost = (parts: DynPart[], depot: LatLng, obj: OptimizeObjective) =>
+  parts.reduce((sum, p) => sum + routeScore(p.truck, p.locs, depot, obj), 0)
 
 const EPS = 1e-6
 
@@ -230,6 +246,7 @@ function oneMove(
   depot: LatLng,
   speed: number,
   startMin: number,
+  obj: OptimizeObjective,
 ): boolean {
   // SWAP TRUCKS between two routes (heterogeneous fleet): keep each route's stops
   // but exchange the trucks so the cheaper cost/km serves the longer route.
@@ -242,8 +259,8 @@ function oneMove(
       if (A.truck.id === B.truck.id) continue
       if (loadM3(A.locs) > B.truck.capacityM3 + EPS || loadKg(A.locs) > B.truck.capacityKg + EPS) continue
       if (loadM3(B.locs) > A.truck.capacityM3 + EPS || loadKg(B.locs) > A.truck.capacityKg + EPS) continue
-      const before = partCost(A.truck, A.locs, depot) + partCost(B.truck, B.locs, depot)
-      const after = partCost(B.truck, A.locs, depot) + partCost(A.truck, B.locs, depot)
+      const before = routeScore(A.truck, A.locs, depot, obj) + routeScore(B.truck, B.locs, depot, obj)
+      const after = routeScore(B.truck, A.locs, depot, obj) + routeScore(A.truck, B.locs, depot, obj)
       if (after - before < -EPS) {
         const tA = A.truck, rA = A.round
         A.truck = B.truck
@@ -260,8 +277,8 @@ function oneMove(
     for (let i = 0; i < A.locs.length; i++) {
       const s = A.locs[i]
       const aWithout = [...A.locs.slice(0, i), ...A.locs.slice(i + 1)]
-      const before = partCost(A.truck, A.locs, depot)
-      const aAfter = partCost(A.truck, aWithout, depot)
+      const before = routeScore(A.truck, A.locs, depot, obj)
+      const aAfter = routeScore(A.truck, aWithout, depot, obj)
       for (let b = 0; b < parts.length; b++) {
         if (b === a) continue
         const B = parts[b]
@@ -269,7 +286,7 @@ function oneMove(
         const ins = bestInsertion(B.locs, s, depot, speed, startMin)
         if (!ins) continue
         const bWith = [...B.locs.slice(0, ins.pos), s, ...B.locs.slice(ins.pos)]
-        const delta = aAfter + partCost(B.truck, bWith, depot) - before - partCost(B.truck, B.locs, depot)
+        const delta = aAfter + routeScore(B.truck, bWith, depot, obj) - before - routeScore(B.truck, B.locs, depot, obj)
         if (delta < -EPS) {
           A.locs = aWithout
           B.locs = bWith
@@ -283,7 +300,7 @@ function oneMove(
     const A = parts[a]
     for (let b = a + 1; b < parts.length; b++) {
       const B = parts[b]
-      const before = partCost(A.truck, A.locs, depot) + partCost(B.truck, B.locs, depot)
+      const before = routeScore(A.truck, A.locs, depot, obj) + routeScore(B.truck, B.locs, depot, obj)
       for (let i = 0; i < A.locs.length; i++) {
         const sA = A.locs[i]
         for (let j = 0; j < B.locs.length; j++) {
@@ -297,7 +314,7 @@ function oneMove(
           if (!insA || !insB) continue
           const aNew = [...aRem.slice(0, insA.pos), sB, ...aRem.slice(insA.pos)]
           const bNew = [...bRem.slice(0, insB.pos), sA, ...bRem.slice(insB.pos)]
-          const delta = partCost(A.truck, aNew, depot) + partCost(B.truck, bNew, depot) - before
+          const delta = routeScore(A.truck, aNew, depot, obj) + routeScore(B.truck, bNew, depot, obj) - before
           if (delta < -EPS) {
             A.locs = aNew
             B.locs = bNew
@@ -316,7 +333,7 @@ function oneMove(
       const ins = bestInsertion(p.locs, s, depot, speed, startMin)
       if (!ins) continue
       const withS = [...p.locs.slice(0, ins.pos), s, ...p.locs.slice(ins.pos)]
-      const cost = partCost(p.truck, withS, depot) - partCost(p.truck, p.locs, depot)
+      const cost = routeScore(p.truck, withS, depot, obj) - routeScore(p.truck, p.locs, depot, obj)
       if (!best || cost < best.cost) best = { part: p, pos: ins.pos, cost }
     }
     if (best) {
@@ -329,9 +346,9 @@ function oneMove(
 }
 
 /** Descend to a local optimum (first-improvement, iterated). */
-function descend(parts: DynPart[], unassigned: DeliveryLocation[], depot: LatLng, speed: number, startMin: number) {
+function descend(parts: DynPart[], unassigned: DeliveryLocation[], depot: LatLng, speed: number, startMin: number, obj: OptimizeObjective) {
   let guard = 0
-  while (oneMove(parts, unassigned, depot, speed, startMin) && guard++ < 5000) {
+  while (oneMove(parts, unassigned, depot, speed, startMin, obj) && guard++ < 5000) {
     /* keep improving */
   }
 }
@@ -373,8 +390,8 @@ const cloneParts = (parts: DynPart[]): DynPart[] => parts.map((p) => ({ truck: p
  * (lowest total cost) solution found. All moves stay capacity + time-window
  * feasible, so the result is never worse than the plain local search.
  */
-function solve(parts: DynPart[], unassigned: DeliveryLocation[], depot: LatLng, speed: number, startMin: number) {
-  descend(parts, unassigned, depot, speed, startMin)
+function solve(parts: DynPart[], unassigned: DeliveryLocation[], depot: LatLng, speed: number, startMin: number, obj: OptimizeObjective) {
+  descend(parts, unassigned, depot, speed, startMin, obj)
   const totalStops = parts.reduce((n, p) => n + p.locs.length, 0)
   if (totalStops < 2 || parts.length < 1) return
   const rng = mulberry32(seedFrom(parts, unassigned))
@@ -387,7 +404,7 @@ function solve(parts: DynPart[], unassigned: DeliveryLocation[], depot: LatLng, 
 
   let best = cloneParts(parts)
   let bestUn = [...unassigned]
-  let bestCost = solutionCost(best, depot)
+  let bestCost = solutionCost(best, depot, obj)
   let stall = 0
 
   for (let it = 0; it < iterations && stall < stallLimit; it++) {
@@ -404,8 +421,8 @@ function solve(parts: DynPart[], unassigned: DeliveryLocation[], depot: LatLng, 
       p.locs.splice(idx, 1)
     }
     // RECREATE + local search, then keep if strictly cheaper.
-    descend(work, pool, depot, speed, startMin)
-    const cost = solutionCost(work, depot)
+    descend(work, pool, depot, speed, startMin, obj)
+    const cost = solutionCost(work, depot, obj)
     if (pool.length < bestUn.length || (pool.length === bestUn.length && cost < bestCost - EPS)) {
       best = work
       bestUn = pool

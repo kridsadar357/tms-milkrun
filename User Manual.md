@@ -191,7 +191,11 @@ the right.
 
 ### 5.1 Auto Route
 
-Click **Auto Route**. The optimizer:
+Pick **Optimize for** first — **Lowest cost (฿)** (the default: cheapest total
+delivery cost, so the cheaper cost/km truck takes the longer route and fewer
+trucks are used when that saves money), **Shortest distance** (fewest total km),
+or **Balanced load** (keeps cost low while spreading load evenly). The choice is
+saved. Then click **Auto Route**. The optimizer:
 
 1. builds one trip per truck round with a **time-window + capacity
    nearest-neighbour** pass, respecting **both m³ and kg** and filling **rounds

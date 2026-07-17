@@ -13,9 +13,11 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
   between routes to **cut total cost and even out load** (the cheaper cost/km
   truck takes the longer route; fewer trucks when cheaper), escaping local optima
   while keeping every route capacity- and window-feasible, then **reinserts** any
-  stop that now fits. It is **deterministic** (seeded) and stays well under a
-  second even for ~60 stops. Optionally snaps routes to real roads via **Mapbox
-  Directions** (real distance, duration, and cost re-pricing).
+  stop that now fits. Choose what it minimizes with **Optimize for: Lowest cost
+  (฿, default) / Shortest distance / Balanced load**. It is **deterministic**
+  (seeded) and stays well under a second even for ~60 stops. Optionally snaps
+  routes to real roads via **Mapbox Directions** (real distance, duration, and
+  cost re-pricing).
 - **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
   rotation) or is assigned **dynamically** by the optimizer.
 - **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading

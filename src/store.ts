@@ -70,6 +70,7 @@ const defaultSettings: Settings = {
   depotLng: 100.9319,
   avgSpeedKmh: 45,
   planStartTime: '08:00',
+  optimizeObjective: 'cost',
   useRoadGeometry: true,
   dieselPricePerLiter: 32,
   fuelConsumptionKmPerL: 4,

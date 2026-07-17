@@ -35,6 +35,9 @@ export type TruckType = '4W' | '4WJ' | '6W' | '10W' | 'Trailer'
 
 export type AssignmentMode = 'dynamic' | 'fixed'
 
+/** What Auto Route optimizes for. `cost` = cheapest total delivery cost (฿). */
+export type OptimizeObjective = 'cost' | 'distance' | 'balanced'
+
 export interface Truck {
   id: string
   plateNumber: string
@@ -200,6 +203,7 @@ export interface Settings {
   depotLng: number
   avgSpeedKmh: number
   planStartTime: string // planned depot departure clock 'HH:MM' (default 08:00)
+  optimizeObjective: OptimizeObjective // what Auto Route minimizes (default 'cost')
   useRoadGeometry: boolean
   // Fuel & emissions
   dieselPricePerLiter: number // THB per liter

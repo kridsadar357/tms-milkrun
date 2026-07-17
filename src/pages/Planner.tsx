@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarDays, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Route, Trash2,
-  TrendingDown, TriangleAlert, Truck as TruckIcon, UserRound,
+  CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Route, Scale,
+  Spline, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, UserRound,
 } from 'lucide-react'
+import type { OptimizeObjective } from '../types'
 import { effectiveMapboxToken, useTms } from '../store'
 import { can } from '../lib/permissions'
 import { planRoutes, rebuildRoute, servesDay } from '../lib/optimizer'
@@ -32,7 +33,7 @@ const NEXT_ACTION: Partial<Record<TripStatus, [TripStatus, string]>> = {
 export default function Planner() {
   const { t, i18n } = useTranslation()
   const { trucks, locations, partners, drivers, plan, settings, setPlan, updateRouteStatus,
-    patchRoute, updatePlanRoutes } = useTms()
+    patchRoute, updatePlanRoutes, updateSettings } = useTms()
   const [busy, setBusy] = useState<null | 'plan' | 'road'>(null)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [excludedTrucks, setExcludedTrucks] = useState<Set<string>>(new Set())
@@ -121,6 +122,7 @@ export default function Planner() {
       lockedRoutes,
       dayOfWeek: planDay ?? undefined,
       planStartTime: settings.planStartTime,
+      objective: settings.optimizeObjective,
     })
     setPlan(result)
     setSavings(prev ? diff(prev, summarize(result.routes)) : null)
@@ -296,6 +298,35 @@ export default function Planner() {
           )}
 
           {/* Multi-day: pick the weekday to plan + weekly demand overview */}
+          {canEditPlan && (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <div className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-2">
+                <Coins size={15} className="text-slate-400" /> {t('planner.optimizeFor')}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {([
+                  ['cost', Coins],
+                  ['distance', Spline],
+                  ['balanced', Scale],
+                ] as [OptimizeObjective, typeof Coins][]).map(([obj, Icon]) => (
+                  <button
+                    key={obj}
+                    onClick={() => updateSettings({ optimizeObjective: obj })}
+                    className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer border transition ${
+                      settings.optimizeObjective === obj
+                        ? 'bg-brand-500 text-white border-brand-500'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {t(`planner.obj.${obj}`)}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">{t(`planner.objHint.${settings.optimizeObjective}`)}</p>
+            </div>
+          )}
+
           {canEditPlan && (
             <details className="rounded-xl border border-slate-200 bg-white">
               <summary className="px-4 py-2.5 text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-2">
