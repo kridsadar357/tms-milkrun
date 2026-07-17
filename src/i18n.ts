@@ -164,6 +164,10 @@ const en = {
     },
     lateWindow: 'Late {{n}}m',
     inWindow: 'In window',
+    planTotal: 'Plan total cost',
+    unitCost: 'Unit cost',
+    routesCount: 'Routes',
+    unassignedN: '{{n}} stop(s) unassigned',
   },
   locations: {
     title: 'Delivery Locations',
@@ -676,6 +680,10 @@ const th: typeof en = {
     },
     lateWindow: 'สาย {{n}} นาที',
     inWindow: 'ตรงเวลา',
+    planTotal: 'ต้นทุนรวมทั้งแผน',
+    unitCost: 'ต้นทุนต่อหน่วย',
+    routesCount: 'เส้นทาง',
+    unassignedN: 'ยังไม่ได้จัดรถ {{n}} จุด',
   },
   locations: {
     title: 'จุดส่งสินค้า',

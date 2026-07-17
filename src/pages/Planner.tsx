@@ -105,6 +105,15 @@ export default function Planner() {
     co2: rs.reduce((n, r) => n + estimateCo2Kg(r.distanceKm, settings), 0),
   })
 
+  const planTotals = useMemo(() => {
+    if (!plan) return null
+    const rs = plan.routes
+    const t2 = summarize(rs)
+    const m3 = rs.reduce((n, r) => n + r.totalM3, 0)
+    return { ...t2, routes: rs.filter((r) => r.stops.length > 0).length, unitCost: m3 > 0 ? Math.round(t2.cost / m3) : 0 }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, settings.dieselPricePerLiter, settings.fuelConsumptionKmPerL, settings.co2KgPerLiter])
+
   const runAutoRoute = async () => {
     const prev = plan ? summarize(plan.routes) : null
     setBusy('plan')
@@ -281,6 +290,41 @@ export default function Planner() {
             <p className="text-xs text-slate-400">
               {t('planner.plannedAt')}: {new Date(plan.plannedAt).toLocaleString()}
             </p>
+          )}
+
+          {/* Whole-plan totals — the headline delivery cost for the chosen objective */}
+          {plan && planTotals && (
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <Coins size={16} className="text-brand-500" /> {t('planner.planTotal')}
+                </div>
+                <Badge tone="blue">{t(`planner.obj.${settings.optimizeObjective}`)}</Badge>
+              </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums leading-tight">
+                ฿{fmt(Math.round(planTotals.cost), i18n.language)}
+              </div>
+              <div className="text-[11px] text-slate-400 mb-3">
+                {t('planner.unitCost')}: ฿{fmt(planTotals.unitCost, i18n.language)}/{t('common.m3')}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  [t('planner.routesCount'), `${planTotals.routes}`, ''],
+                  [t('planner.distance'), fmt(Math.round(planTotals.distanceKm), i18n.language), t('common.km')],
+                  [t('planner.co2'), fmt(Math.round(planTotals.co2), i18n.language), t('common.kg')],
+                ].map(([label, value, unit]) => (
+                  <div key={label} className="rounded-lg bg-slate-50 py-2">
+                    <div className="text-sm font-semibold text-slate-800 tabular-nums">{value} <span className="text-[10px] font-normal text-slate-400">{unit}</span></div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wide">{label}</div>
+                  </div>
+                ))}
+              </div>
+              {plan.unassignedLocationIds.length > 0 && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+                  <TriangleAlert size={13} /> {t('planner.unassignedN', { n: plan.unassignedLocationIds.length })}
+                </div>
+              )}
+            </Card>
           )}
 
           {/* Before/after savings from the last re-plan */}
