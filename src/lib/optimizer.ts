@@ -15,6 +15,23 @@
 import type { DeliveryLocation, OptimizeObjective, PlannedRoute, PlanResult, RouteStop, Truck } from '../types'
 import { roadKm, type LatLng } from './geo'
 
+/**
+ * A precomputed real-road distance matrix (km) for a fixed list of points
+ * (depot + stops), from the Mapbox Matrix API. When supplied to planRoutes it
+ * drives every routing decision on real road distances instead of the haversine
+ * estimate; any point/pair not in the matrix falls back to haversine × 1.3.
+ */
+export interface DistanceMatrix {
+  points: LatLng[]
+  km: number[][]
+}
+
+/** Active road-distance lookup for the current planRoutes run (null = haversine). */
+let matrixDist: ((a: LatLng, b: LatLng) => number) | null = null
+/** Distance between two points: real Mapbox road km if available, else haversine × 1.3. */
+const dist = (a: LatLng, b: LatLng) => (matrixDist ? matrixDist(a, b) : roadKm(a, b))
+const ptKey = (p: LatLng) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`
+
 interface TripSlot {
   truck: Truck
   round: number
@@ -33,6 +50,8 @@ export interface PlanInput {
   planStartTime?: string
   /** What to minimize: 'cost' (cheapest ฿, default), 'distance' (km), or 'balanced'. */
   objective?: OptimizeObjective
+  /** Real Mapbox road-distance matrix; when set, all decisions use real road km. */
+  distanceMatrix?: DistanceMatrix
 }
 
 /** A location is served on a day if it has no schedule, or lists that weekday. */
@@ -54,7 +73,7 @@ const minToHm = (min: number) => {
 }
 const winStart = (l: DeliveryLocation) => (l.windowStart ? hmToMin(l.windowStart) : null)
 const winEnd = (l: DeliveryLocation) => (l.windowEnd ? hmToMin(l.windowEnd) : null)
-const travelMin = (a: LatLng, b: LatLng, speed: number) => (roadKm(a, b) / speed) * 60
+const travelMin = (a: LatLng, b: LatLng, speed: number) => (dist(a, b) / speed) * 60
 
 /** True if visiting `tour` from `startMin` reaches every stop within its window. */
 function tourFeasible(tour: DeliveryLocation[], depot: LatLng, speed: number, startMin: number): boolean {
@@ -73,6 +92,36 @@ function tourFeasible(tour: DeliveryLocation[], depot: LatLng, speed: number, st
 }
 
 export function planRoutes({
+  trucks,
+  locations,
+  depot,
+  avgSpeedKmh,
+  lockedRoutes = [],
+  dayOfWeek,
+  planStartTime = '08:00',
+  objective = 'cost',
+  distanceMatrix,
+}: PlanInput): PlanResult {
+  // Route every distance query through the real Mapbox matrix when provided.
+  if (distanceMatrix) {
+    const idx = new Map(distanceMatrix.points.map((p, i) => [ptKey(p), i]))
+    const km = distanceMatrix.km
+    matrixDist = (a, b) => {
+      const i = idx.get(ptKey(a))
+      const j = idx.get(ptKey(b))
+      return i != null && j != null && km[i]?.[j] != null ? km[i][j] : roadKm(a, b)
+    }
+  } else {
+    matrixDist = null
+  }
+  try {
+    return planRoutesInner({ trucks, locations, depot, avgSpeedKmh, lockedRoutes, dayOfWeek, planStartTime, objective })
+  } finally {
+    matrixDist = null
+  }
+}
+
+function planRoutesInner({
   trucks,
   locations,
   depot,
@@ -173,10 +222,10 @@ function routeDist(locs: DeliveryLocation[], depot: LatLng): number {
   let d = 0
   let prev: LatLng = depot
   for (const l of locs) {
-    d += roadKm(prev, l)
+    d += dist(prev, l)
     prev = l
   }
-  return d + roadKm(prev, depot)
+  return d + dist(prev, depot)
 }
 const loadM3 = (locs: DeliveryLocation[]) => locs.reduce((a, l) => a + l.demandM3, 0)
 const loadKg = (locs: DeliveryLocation[]) => locs.reduce((a, l) => a + l.demandKg, 0)
@@ -203,7 +252,7 @@ function bestInsertion(
   for (let pos = 0; pos <= locs.length; pos++) {
     const prev: LatLng = pos === 0 ? depot : locs[pos - 1]
     const next: LatLng = pos === locs.length ? depot : locs[pos]
-    const delta = roadKm(prev, s) + roadKm(s, next) - roadKm(prev, next)
+    const delta = dist(prev, s) + dist(s, next) - dist(prev, next)
     if (best && delta >= best.delta) continue
     if (needFeas && !tourFeasible([...locs.slice(0, pos), s, ...locs.slice(pos)], depot, speed, startMin)) continue
     best = { pos, delta }
@@ -476,11 +525,11 @@ function twConstruct(
       const we = winEnd(loc)
       const late = we != null ? Math.max(0, arrive - we) : 0
       if (late > 1e-6 && !allowLate) continue // infeasible for a dynamic truck
-      const dist = roadKm(cursor, loc)
+      const legKm = dist(cursor, loc)
       // Fixed routes prefer the least-late then nearest; dynamic prefer nearest.
-      if (allowLate ? late < bestLate - 1e-6 || (Math.abs(late - bestLate) < 1e-6 && dist < bestDist) : dist < bestDist) {
+      if (allowLate ? late < bestLate - 1e-6 || (Math.abs(late - bestLate) < 1e-6 && legKm < bestDist) : legKm < bestDist) {
         bestLate = late
-        bestDist = dist
+        bestDist = legKm
         bestIdx = i
       }
     }
@@ -508,8 +557,8 @@ function twoOptTW(stops: DeliveryLocation[], depot: LatLng, speed: number, start
     improved = false
     for (let i = 0; i < tour.length - 1; i++) {
       for (let j = i + 1; j < tour.length; j++) {
-        const before = roadKm(point(i - 1), point(i)) + roadKm(point(j), point(j + 1))
-        const after = roadKm(point(i - 1), point(j)) + roadKm(point(i), point(j + 1))
+        const before = dist(point(i - 1), point(i)) + dist(point(j), point(j + 1))
+        const after = dist(point(i - 1), point(j)) + dist(point(i), point(j + 1))
         if (after + 1e-9 < before) {
           const cand = [...tour]
           cand.splice(i, j - i + 1, ...tour.slice(i, j + 1).reverse())
@@ -566,7 +615,7 @@ function buildRoute(
   let clock = startMin // arrival clock, running from the depot departure
   let prev: LatLng = depot
   const stops: RouteStop[] = ordered.map((loc, i) => {
-    const leg = roadKm(prev, loc)
+    const leg = dist(prev, loc)
     distanceKm += leg
     let arrive = clock + (leg / avgSpeedKmh) * 60
     const ws = winStart(loc)
@@ -585,7 +634,7 @@ function buildRoute(
       ...(lateBy > 0 ? { lateBy } : {}),
     }
   })
-  const back = roadKm(prev, depot)
+  const back = dist(prev, depot)
   distanceKm += back
   const durationMinutes = Math.round(clock + (back / avgSpeedKmh) * 60 - startMin)
 

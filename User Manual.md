@@ -209,8 +209,10 @@ saved. Then click **Auto Route**. The optimizer:
    optima, accepting a change only if every route stays within capacity **and**
    its time windows, and **reinserts** any unassigned stop that now fits. The
    result is **repeatable** (the same input always gives the same plan), then
-4. (if a Mapbox token is set) **snaps each route to real roads** via the Mapbox
-   Directions API and re-prices it with true distance.
+4. (if a Mapbox token is set and **Snap routes to real roads** is on) plans on a
+   **real Mapbox road-distance matrix** so the cost, time windows, and stop order
+   are decided on true road distances — not straight-line estimates — then
+   **snaps each route polyline to the roads** and re-prices it with real distance.
 
 Each **route card** shows truck, driver, partner, round, trip status, volume/
 weight utilization, distance, duration, cost, and estimated **CO₂**.

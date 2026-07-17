@@ -15,9 +15,11 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
   while keeping every route capacity- and window-feasible, then **reinserts** any
   stop that now fits. Choose what it minimizes with **Optimize for: Lowest cost
   (฿, default) / Shortest distance / Balanced load**. It is **deterministic**
-  (seeded) and stays well under a second even for ~60 stops. Optionally snaps
-  routes to real roads via **Mapbox Directions** (real distance, duration, and
-  cost re-pricing).
+  (seeded) and stays well under a second even for ~60 stops. When road geometry
+  is enabled it plans on a **real Mapbox road-distance matrix** (Matrix API,
+  tiled for large stop sets) so cost, time windows, and sequencing all use true
+  road distances — not the haversine estimate — and then snaps the route polyline
+  to roads via **Mapbox Directions**.
 - **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
   rotation) or is assigned **dynamically** by the optimizer.
 - **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading
@@ -131,6 +133,7 @@ i18next 26 · Express · pg (Neon Postgres)
 ```
 src/
   lib/optimizer.ts    VRPTW engine (NN + 2-opt + ruin/recreate ILS: relocate/swap/truck-exchange)
+  lib/matrix.ts       Mapbox Matrix API — real road-distance matrix (tiled) for planning
   lib/directions.ts   Mapbox Directions road-snapping & re-pricing
   lib/geo.ts          haversine, bearing, lat/long validation
   store.ts            Zustand persisted store + seed data

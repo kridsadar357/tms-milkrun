@@ -9,6 +9,7 @@ import { effectiveMapboxToken, useTms } from '../store'
 import { can } from '../lib/permissions'
 import { planRoutes, rebuildRoute, servesDay } from '../lib/optimizer'
 import { applyRoadData, fetchRoadRoute } from '../lib/directions'
+import { fetchDistanceMatrix } from '../lib/matrix'
 import { exportToExcel } from '../lib/excel'
 import MapView, { ROUTE_COLORS } from '../components/MapView'
 import { Badge, Button, Card, PageHeader } from '../components/ui'
@@ -123,6 +124,21 @@ export default function Planner() {
     // Keep locked routes as-is; exclude any "what-if" trucks from planning.
     const lockedRoutes = (plan?.routes ?? []).filter((r) => r.locked)
     const usableTrucks = trucks.filter((tr) => !excludedTrucks.has(tr.id))
+
+    // When road geometry is on, plan on REAL Mapbox road distances: fetch a
+    // distance matrix over the depot + the stops that will actually be routed.
+    let distanceMatrix
+    if (settings.useRoadGeometry && mapToken) {
+      const lockedIds = new Set(lockedRoutes.flatMap((r) => r.stops.map((s) => s.locationId)))
+      const planStops = locations.filter(
+        (l) => l.active && (l.demandM3 > 0 || l.demandKg > 0) && !lockedIds.has(l.id) && servesDay(l, planDay ?? undefined),
+      )
+      setBusy('road')
+      distanceMatrix = (await fetchDistanceMatrix(mapToken, [depot, ...planStops])) ?? undefined
+      setBusy('plan')
+      await new Promise((r) => setTimeout(r, 30))
+    }
+
     const result = planRoutes({
       trucks: usableTrucks,
       locations,
@@ -132,6 +148,7 @@ export default function Planner() {
       dayOfWeek: planDay ?? undefined,
       planStartTime: settings.planStartTime,
       objective: settings.optimizeObjective,
+      distanceMatrix,
     })
     setPlan(result)
     setSavings(prev ? diff(prev, summarize(result.routes)) : null)
