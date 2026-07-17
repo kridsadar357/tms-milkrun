@@ -193,9 +193,15 @@ the right.
 
 Click **Auto Route**. The optimizer:
 
-1. **Sweep-clusters** stops by bearing around the depot,
-2. respects **both m³ and kg** capacity per truck, filling **rounds per day**,
-3. sequences each trip with **nearest-neighbour + 2-opt**, then
+1. builds one trip per truck round with a **time-window + capacity
+   nearest-neighbour** pass, respecting **both m³ and kg** and filling **rounds
+   per day**,
+2. sequences each trip with time-window-feasible **2-opt**,
+3. runs an **inter-route optimization pass** — it **relocates** and **swaps**
+   stops between routes and **exchanges trucks** (so the cheaper cost/km truck
+   takes the longer route) to **lower total cost and even out load**, accepting a
+   move only if both routes stay within capacity **and** their time windows, and
+   **reinserts** any unassigned stop that now fits, then
 4. (if a Mapbox token is set) **snaps each route to real roads** via the Mapbox
    Directions API and re-prices it with true distance.
 

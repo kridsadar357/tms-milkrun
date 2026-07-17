@@ -121,26 +121,196 @@ export function planRoutes({
     .filter((s) => !usedSlots.has(`${s.truck.id}-r${s.round}`))
     .sort((a, b) => b.truck.capacityM3 - a.truck.capacityM3 || a.round - b.round)
 
-  const newRoutes: PlannedRoute[] = []
-  const colorBase = lockedRoutes.length + fixedRoutes.length
-
+  // Construct one part per dynamic slot (time-window + capacity nearest-neighbour).
+  const parts: DynPart[] = []
   for (const slot of slots) {
     if (remaining.size === 0) break
-    const { truck, round } = slot
     const candidates = active.filter((l) => remaining.has(l.id))
-    // Time-window + capacity nearest-neighbour: only stops that fit AND arrive
-    // within their window are taken; the rest stay for other trucks / unassigned.
-    const { ordered } = twConstruct(candidates, truck, depot, avgSpeedKmh, startMin, true, false)
+    const { ordered } = twConstruct(candidates, slot.truck, depot, avgSpeedKmh, startMin, true, false)
     if (ordered.length === 0) continue
     ordered.forEach((l) => remaining.delete(l.id))
-    const seq = twoOptTW(ordered, depot, avgSpeedKmh, startMin)
-    newRoutes.push(buildRoute(truck, round, seq, depot, avgSpeedKmh, colorBase + newRoutes.length, startMin))
+    parts.push({ truck: slot.truck, round: slot.round, locs: ordered })
   }
+
+  // Inter-route local search: relocate / swap stops between dynamic routes to
+  // cut total cost (and even out load), and reinsert any unassigned stops that
+  // now fit — all while keeping capacity + time windows feasible.
+  const unassignedLocs = [...remaining].map((id) => byId.get(id)).filter((l): l is DeliveryLocation => !!l)
+  localSearch(parts, unassignedLocs, depot, avgSpeedKmh, startMin)
+  remaining.clear()
+  unassignedLocs.forEach((l) => remaining.add(l.id))
+
+  const colorBase = lockedRoutes.length + fixedRoutes.length
+  const newRoutes = parts
+    .filter((p) => p.locs.length > 0)
+    .map((p, idx) =>
+      buildRoute(
+        p.truck, p.round, twoOptTW(p.locs, depot, avgSpeedKmh, startMin),
+        depot, avgSpeedKmh, colorBase + idx, startMin,
+      ),
+    )
 
   return {
     routes: [...lockedRoutes, ...fixedRoutes, ...newRoutes],
     unassignedLocationIds: [...remaining].filter((id) => byId.has(id)),
     plannedAt: new Date().toISOString(),
+  }
+}
+
+/* --------------------- inter-route local search (VRP) --------------------- */
+
+interface DynPart {
+  truck: Truck
+  round: number
+  locs: DeliveryLocation[]
+}
+
+function routeDist(locs: DeliveryLocation[], depot: LatLng): number {
+  let d = 0
+  let prev: LatLng = depot
+  for (const l of locs) {
+    d += roadKm(prev, l)
+    prev = l
+  }
+  return d + roadKm(prev, depot)
+}
+const loadM3 = (locs: DeliveryLocation[]) => locs.reduce((a, l) => a + l.demandM3, 0)
+const loadKg = (locs: DeliveryLocation[]) => locs.reduce((a, l) => a + l.demandKg, 0)
+const capFits = (truck: Truck, locs: DeliveryLocation[], extra: number, extraKg: number) =>
+  loadM3(locs) + extra <= truck.capacityM3 && loadKg(locs) + extraKg <= truck.capacityKg
+
+/** Best time-window-feasible position to insert `s` into `locs`, or null. */
+function bestInsertion(
+  locs: DeliveryLocation[],
+  s: DeliveryLocation,
+  depot: LatLng,
+  speed: number,
+  startMin: number,
+): { pos: number; delta: number } | null {
+  const base = routeDist(locs, depot)
+  let best: { pos: number; delta: number } | null = null
+  for (let pos = 0; pos <= locs.length; pos++) {
+    const cand = [...locs.slice(0, pos), s, ...locs.slice(pos)]
+    if (!tourFeasible(cand, depot, speed, startMin)) continue
+    const delta = routeDist(cand, depot) - base
+    if (!best || delta < best.delta) best = { pos, delta }
+  }
+  return best
+}
+
+/** One improving move (relocate → swap → reinsert). Returns true if applied. */
+function oneMove(
+  parts: DynPart[],
+  unassigned: DeliveryLocation[],
+  depot: LatLng,
+  speed: number,
+  startMin: number,
+): boolean {
+  const EPS = 1e-6
+  // SWAP TRUCKS between two routes (heterogeneous fleet): keep each route's stops
+  // but exchange the trucks so the cheaper cost/km serves the longer route.
+  // Time windows are unaffected (sequence/timing unchanged). Rounds swap too so
+  // the (truck, round) slots stay unique.
+  for (let a = 0; a < parts.length; a++) {
+    const A = parts[a]
+    for (let b = a + 1; b < parts.length; b++) {
+      const B = parts[b]
+      if (A.truck.id === B.truck.id) continue
+      if (loadM3(A.locs) > B.truck.capacityM3 + EPS || loadKg(A.locs) > B.truck.capacityKg + EPS) continue
+      if (loadM3(B.locs) > A.truck.capacityM3 + EPS || loadKg(B.locs) > A.truck.capacityKg + EPS) continue
+      const delta = (B.truck.costPerKm - A.truck.costPerKm) * (routeDist(A.locs, depot) - routeDist(B.locs, depot))
+      if (delta < -EPS) {
+        const tA = A.truck, rA = A.round
+        A.truck = B.truck
+        A.round = B.round
+        B.truck = tA
+        B.round = rA
+        return true
+      }
+    }
+  }
+  // RELOCATE a stop from route A to a cheaper feasible position in route B.
+  for (let a = 0; a < parts.length; a++) {
+    const A = parts[a]
+    for (let i = 0; i < A.locs.length; i++) {
+      const s = A.locs[i]
+      const aWithout = [...A.locs.slice(0, i), ...A.locs.slice(i + 1)]
+      const aSaved = A.truck.costPerKm * (routeDist(A.locs, depot) - routeDist(aWithout, depot))
+      for (let b = 0; b < parts.length; b++) {
+        if (b === a) continue
+        const B = parts[b]
+        if (!capFits(B.truck, B.locs, s.demandM3, s.demandKg)) continue
+        const ins = bestInsertion(B.locs, s, depot, speed, startMin)
+        if (!ins) continue
+        const bAdded = B.truck.costPerKm * ins.delta
+        if (bAdded - aSaved < -EPS) {
+          A.locs = aWithout
+          B.locs = [...B.locs.slice(0, ins.pos), s, ...B.locs.slice(ins.pos)]
+          return true
+        }
+      }
+    }
+  }
+  // SWAP a stop of A with a stop of B if it lowers total cost.
+  for (let a = 0; a < parts.length; a++) {
+    const A = parts[a]
+    for (let b = a + 1; b < parts.length; b++) {
+      const B = parts[b]
+      for (let i = 0; i < A.locs.length; i++) {
+        const sA = A.locs[i]
+        for (let j = 0; j < B.locs.length; j++) {
+          const sB = B.locs[j]
+          if (!capFits(A.truck, A.locs, sB.demandM3 - sA.demandM3, sB.demandKg - sA.demandKg)) continue
+          if (!capFits(B.truck, B.locs, sA.demandM3 - sB.demandM3, sA.demandKg - sB.demandKg)) continue
+          const aRem = A.locs.filter((_, k) => k !== i)
+          const bRem = B.locs.filter((_, k) => k !== j)
+          const insA = bestInsertion(aRem, sB, depot, speed, startMin)
+          const insB = bestInsertion(bRem, sA, depot, speed, startMin)
+          if (!insA || !insB) continue
+          const aNew = [...aRem.slice(0, insA.pos), sB, ...aRem.slice(insA.pos)]
+          const bNew = [...bRem.slice(0, insB.pos), sA, ...bRem.slice(insB.pos)]
+          const delta =
+            A.truck.costPerKm * (routeDist(aNew, depot) - routeDist(A.locs, depot)) +
+            B.truck.costPerKm * (routeDist(bNew, depot) - routeDist(B.locs, depot))
+          if (delta < -EPS) {
+            A.locs = aNew
+            B.locs = bNew
+            return true
+          }
+        }
+      }
+    }
+  }
+  // REINSERT an unassigned stop into the cheapest feasible route.
+  for (let u = 0; u < unassigned.length; u++) {
+    const s = unassigned[u]
+    let best: { part: DynPart; pos: number; cost: number } | null = null
+    for (const p of parts) {
+      if (!capFits(p.truck, p.locs, s.demandM3, s.demandKg)) continue
+      const ins = bestInsertion(p.locs, s, depot, speed, startMin)
+      if (!ins) continue
+      const cost = p.truck.costPerKm * ins.delta
+      if (!best || cost < best.cost) best = { part: p, pos: ins.pos, cost }
+    }
+    if (best) {
+      best.part.locs = [...best.part.locs.slice(0, best.pos), s, ...best.part.locs.slice(best.pos)]
+      unassigned.splice(u, 1)
+      return true
+    }
+  }
+  return false
+}
+
+function localSearch(
+  parts: DynPart[],
+  unassigned: DeliveryLocation[],
+  depot: LatLng,
+  speed: number,
+  startMin: number,
+) {
+  let guard = 0
+  while (oneMove(parts, unassigned, depot, speed, startMin) && guard++ < 2000) {
+    /* keep improving */
   }
 }
 

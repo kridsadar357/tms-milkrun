@@ -8,8 +8,12 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
 - **Auto Route (VRPTW solver)** — time-window + capacity nearest-neighbour with
   time-window-feasible 2-opt, respecting **both m³ and kg** capacity and each
   stop’s **delivery window** (waits if early, rejects if too late), with
-  **multiple rounds per day**. Optionally snaps routes to real roads via **Mapbox
-  Directions** (real distance, duration, and cost re-pricing).
+  **multiple rounds per day**. A final **inter-route optimization pass**
+  relocates/swaps stops and exchanges trucks between routes to **cut total cost
+  and even out load** (the cheaper cost/km truck takes the longer route), keeping
+  every route capacity- and window-feasible, then **reinserts** any stop that now
+  fits. Optionally snaps routes to real roads via **Mapbox Directions** (real
+  distance, duration, and cost re-pricing).
 - **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
   rotation) or is assigned **dynamically** by the optimizer.
 - **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading
@@ -122,7 +126,7 @@ i18next 26 · Express · pg (Neon Postgres)
 
 ```
 src/
-  lib/optimizer.ts    CVRP auto-route engine (sweep + NN + 2-opt)
+  lib/optimizer.ts    VRPTW engine (NN + 2-opt + inter-route relocate/swap/truck-exchange)
   lib/directions.ts   Mapbox Directions road-snapping & re-pricing
   lib/geo.ts          haversine, bearing, lat/long validation
   store.ts            Zustand persisted store + seed data
