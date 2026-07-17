@@ -155,6 +155,8 @@ const en = {
     emptyRemoved: 'Empty route removed',
     planDay: 'Plan day',
     weekOverview: 'Weekly demand',
+    lateWindow: 'Late {{n}}m',
+    inWindow: 'In window',
   },
   locations: {
     title: 'Delivery Locations',
@@ -411,6 +413,7 @@ const en = {
     depot: 'Depot (Route Origin)',
     depotName: 'Depot Name',
     avgSpeed: 'Average Speed (km/h)',
+    planStartTime: 'Depot Departure (HH:MM)',
     useRoad: 'Snap routes to real roads (Mapbox Directions)',
     theme: 'Appearance',
     themeLight: 'Light',
@@ -657,6 +660,8 @@ const th: typeof en = {
     emptyRemoved: 'ลบเส้นทางว่างแล้ว',
     planDay: 'วางแผนวัน',
     weekOverview: 'ความต้องการรายสัปดาห์',
+    lateWindow: 'สาย {{n}} นาที',
+    inWindow: 'ตรงเวลา',
   },
   locations: {
     title: 'จุดส่งสินค้า',
@@ -913,6 +918,7 @@ const th: typeof en = {
     depot: 'ศูนย์กระจายสินค้า (จุดเริ่มต้นเส้นทาง)',
     depotName: 'ชื่อศูนย์กระจายสินค้า',
     avgSpeed: 'ความเร็วเฉลี่ย (กม./ชม.)',
+    planStartTime: 'เวลาออกจากศูนย์ (ชม:นาที)',
     useRoad: 'ปรับเส้นทางตามถนนจริง (Mapbox Directions)',
     theme: 'ธีมการแสดงผล',
     themeLight: 'สว่าง',

@@ -5,10 +5,11 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
 
 ## Features
 
-- **Auto Route (CVRP solver)** — sweep clustering + nearest-neighbour + 2-opt,
-  respecting **both m³ and kg** capacity per truck, with **multiple rounds per day**.
-  Optionally snaps routes to real roads via **Mapbox Directions** (real distance,
-  duration, and cost re-pricing).
+- **Auto Route (VRPTW solver)** — time-window + capacity nearest-neighbour with
+  time-window-feasible 2-opt, respecting **both m³ and kg** capacity and each
+  stop’s **delivery window** (waits if early, rejects if too late), with
+  **multiple rounds per day**. Optionally snaps routes to real roads via **Mapbox
+  Directions** (real distance, duration, and cost re-pricing).
 - **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
   rotation) or is assigned **dynamically** by the optimizer.
 - **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading

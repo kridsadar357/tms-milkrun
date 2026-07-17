@@ -120,6 +120,7 @@ export default function Planner() {
       avgSpeedKmh: settings.avgSpeedKmh,
       lockedRoutes,
       dayOfWeek: planDay ?? undefined,
+      planStartTime: settings.planStartTime,
     })
     setPlan(result)
     setSavings(prev ? diff(prev, summarize(result.routes)) : null)
@@ -535,6 +536,11 @@ export default function Planner() {
                             <span className="text-slate-400 whitespace-nowrap">
                               +{s.distanceFromPrevKm} {t('common.km')} · {s.etaMinutes} {t('common.min')}
                             </span>
+                            {s.lateBy ? (
+                              <Badge tone="red">{t('planner.lateWindow', { n: s.lateBy })}</Badge>
+                            ) : loc?.windowStart ? (
+                              <Badge tone="green">{t('planner.inWindow')}</Badge>
+                            ) : null}
                             {canEditPlan && otherRoutes.length > 0 && (
                               <select
                                 title={t('planner.moveTo')}

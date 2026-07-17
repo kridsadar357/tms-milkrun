@@ -76,7 +76,8 @@ export interface RouteStop {
   locationId: string
   sequence: number
   distanceFromPrevKm: number
-  etaMinutes: number // minutes from route start
+  etaMinutes: number // minutes from route start (includes any waiting for a window)
+  lateBy?: number // minutes past the delivery window's end (0 / undefined = on time)
 }
 
 export type TripStatus = 'planned' | 'dispatched' | 'in-transit' | 'completed'
@@ -198,6 +199,7 @@ export interface Settings {
   depotLat: number
   depotLng: number
   avgSpeedKmh: number
+  planStartTime: string // planned depot departure clock 'HH:MM' (default 08:00)
   useRoadGeometry: boolean
   // Fuel & emissions
   dieselPricePerLiter: number // THB per liter

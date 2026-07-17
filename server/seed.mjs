@@ -73,6 +73,7 @@ const settings = {
   depotLat: 13.1544,
   depotLng: 100.9319,
   avgSpeedKmh: 45,
+  planStartTime: '08:00',
   useRoadGeometry: true,
   dieselPricePerLiter: 32,
   fuelConsumptionKmPerL: 4,

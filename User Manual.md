@@ -202,8 +202,15 @@ Click **Auto Route**. The optimizer:
 Each **route card** shows truck, driver, partner, round, trip status, volume/
 weight utilization, distance, duration, cost, and estimated **CO₂**.
 
-Stops that don’t fit any truck appear under **Unassigned Stops** — add trucks or
-rounds to absorb them.
+**Time windows are enforced.** Arrival times run from the depot departure clock
+(**Settings → Depot Departure**, default 08:00). A stop is only assigned to a
+truck if it both **fits capacity** and can be **reached within its delivery
+window** — the truck waits if it arrives early, and a stop that can’t be reached
+in time is left unassigned. Fixed cyclic routes keep all their stops but flag any
+late arrival. Selected-route stops show an **In window** / **Late Nm** badge.
+
+Stops that don’t fit any truck **or can’t meet their time window** appear under
+**Unassigned Stops** — add trucks, rounds, or widen the window.
 
 ### 5.2 The map
 

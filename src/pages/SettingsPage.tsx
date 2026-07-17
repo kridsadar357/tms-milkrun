@@ -17,6 +17,7 @@ export default function SettingsPage() {
     depotLat: String(settings.depotLat),
     depotLng: String(settings.depotLng),
     avgSpeedKmh: String(settings.avgSpeedKmh),
+    planStartTime: settings.planStartTime ?? '08:00',
     useRoadGeometry: settings.useRoadGeometry,
     dieselPricePerLiter: String(settings.dieselPricePerLiter),
     fuelConsumptionKmPerL: String(settings.fuelConsumptionKmPerL),
@@ -43,6 +44,7 @@ export default function SettingsPage() {
       depotLat: Number(form.depotLat),
       depotLng: Number(form.depotLng),
       avgSpeedKmh: Math.max(10, Number(form.avgSpeedKmh) || 45),
+      planStartTime: form.planStartTime || '08:00',
       useRoadGeometry: form.useRoadGeometry,
       dieselPricePerLiter: Math.max(0, Number(form.dieselPricePerLiter) || 0),
       fuelConsumptionKmPerL: Math.max(0.1, Number(form.fuelConsumptionKmPerL) || 4),
@@ -155,9 +157,12 @@ export default function SettingsPage() {
           </div>
         </fieldset>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label={t('settings.avgSpeed')}>
             <input className={inputClass} type="number" min="10" max="120" value={form.avgSpeedKmh} onChange={(e) => setForm({ ...form, avgSpeedKmh: e.target.value })} />
+          </Field>
+          <Field label={t('settings.planStartTime')}>
+            <input className={inputClass} type="time" value={form.planStartTime} onChange={(e) => setForm({ ...form, planStartTime: e.target.value })} />
           </Field>
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
             <input
