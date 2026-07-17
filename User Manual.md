@@ -197,11 +197,14 @@ Click **Auto Route**. The optimizer:
    nearest-neighbour** pass, respecting **both m³ and kg** and filling **rounds
    per day**,
 2. sequences each trip with time-window-feasible **2-opt**,
-3. runs an **inter-route optimization pass** — it **relocates** and **swaps**
-   stops between routes and **exchanges trucks** (so the cheaper cost/km truck
-   takes the longer route) to **lower total cost and even out load**, accepting a
-   move only if both routes stay within capacity **and** their time windows, and
-   **reinserts** any unassigned stop that now fits, then
+3. runs a **metaheuristic optimization pass** (iterated local search with
+   ruin-and-recreate) — it **relocates** and **swaps** stops between routes and
+   **exchanges trucks** (so the cheaper cost/km truck takes the longer route, and
+   fewer trucks are used when that is cheaper) to **lower total cost and even out
+   load**, repeatedly disrupting and rebuilding part of the plan to escape local
+   optima, accepting a change only if every route stays within capacity **and**
+   its time windows, and **reinserts** any unassigned stop that now fits. The
+   result is **repeatable** (the same input always gives the same plan), then
 4. (if a Mapbox token is set) **snaps each route to real roads** via the Mapbox
    Directions API and re-prices it with true distance.
 
