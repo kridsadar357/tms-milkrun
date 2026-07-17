@@ -16,18 +16,24 @@ import type { DeliveryLocation, OptimizeObjective, PlannedRoute, PlanResult, Rou
 import { roadKm, type LatLng } from './geo'
 
 /**
- * A precomputed real-road distance matrix (km) for a fixed list of points
- * (depot + stops), from the Mapbox Matrix API. When supplied to planRoutes it
- * drives every routing decision on real road distances instead of the haversine
- * estimate; any point/pair not in the matrix falls back to haversine × 1.3.
+ * A precomputed real-road matrix for a fixed list of points (depot + stops),
+ * from the Mapbox Matrix API. When supplied to planRoutes it drives every routing
+ * decision on real road distances (`km`, for cost) and real travel times (`min`,
+ * for time windows / ETAs) instead of estimates. Any pair missing from `km` falls
+ * back to haversine × 1.3; any pair missing (or NaN) in `min` falls back to
+ * distance ÷ average speed.
  */
 export interface DistanceMatrix {
   points: LatLng[]
   km: number[][]
+  /** Travel time in minutes; entries may be NaN where the API returned none. */
+  min?: number[][]
 }
 
 /** Active road-distance lookup for the current planRoutes run (null = haversine). */
 let matrixDist: ((a: LatLng, b: LatLng) => number) | null = null
+/** Active real travel-time lookup in minutes (null/NaN = fall back to dist ÷ speed). */
+let matrixDur: ((a: LatLng, b: LatLng) => number | null) | null = null
 /** Distance between two points: real Mapbox road km if available, else haversine × 1.3. */
 const dist = (a: LatLng, b: LatLng) => (matrixDist ? matrixDist(a, b) : roadKm(a, b))
 const ptKey = (p: LatLng) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`
@@ -73,7 +79,11 @@ const minToHm = (min: number) => {
 }
 const winStart = (l: DeliveryLocation) => (l.windowStart ? hmToMin(l.windowStart) : null)
 const winEnd = (l: DeliveryLocation) => (l.windowEnd ? hmToMin(l.windowEnd) : null)
-const travelMin = (a: LatLng, b: LatLng, speed: number) => (dist(a, b) / speed) * 60
+/** Real Mapbox travel time (min) when available, else road distance ÷ speed. */
+const travelMin = (a: LatLng, b: LatLng, speed: number) => {
+  const m = matrixDur ? matrixDur(a, b) : null
+  return m != null && !Number.isNaN(m) ? m : (dist(a, b) / speed) * 60
+}
 
 /** True if visiting `tour` from `startMin` reaches every stop within its window. */
 function tourFeasible(tour: DeliveryLocation[], depot: LatLng, speed: number, startMin: number): boolean {
@@ -102,22 +112,33 @@ export function planRoutes({
   objective = 'cost',
   distanceMatrix,
 }: PlanInput): PlanResult {
-  // Route every distance query through the real Mapbox matrix when provided.
+  // Route every distance/time query through the real Mapbox matrix when provided.
   if (distanceMatrix) {
     const idx = new Map(distanceMatrix.points.map((p, i) => [ptKey(p), i]))
     const km = distanceMatrix.km
+    const min = distanceMatrix.min
     matrixDist = (a, b) => {
       const i = idx.get(ptKey(a))
       const j = idx.get(ptKey(b))
       return i != null && j != null && km[i]?.[j] != null ? km[i][j] : roadKm(a, b)
     }
+    matrixDur = min
+      ? (a, b) => {
+          const i = idx.get(ptKey(a))
+          const j = idx.get(ptKey(b))
+          const v = i != null && j != null ? min[i]?.[j] : undefined
+          return v != null && !Number.isNaN(v) ? v : null
+        }
+      : null
   } else {
     matrixDist = null
+    matrixDur = null
   }
   try {
     return planRoutesInner({ trucks, locations, depot, avgSpeedKmh, lockedRoutes, dayOfWeek, planStartTime, objective })
   } finally {
     matrixDist = null
+    matrixDur = null
   }
 }
 
@@ -617,7 +638,7 @@ function buildRoute(
   const stops: RouteStop[] = ordered.map((loc, i) => {
     const leg = dist(prev, loc)
     distanceKm += leg
-    let arrive = clock + (leg / avgSpeedKmh) * 60
+    let arrive = clock + travelMin(prev, loc, avgSpeedKmh) // real Mapbox time when available
     const ws = winStart(loc)
     if (ws != null && arrive < ws) arrive = ws // wait for the window to open
     const we = winEnd(loc)
@@ -636,7 +657,7 @@ function buildRoute(
   })
   const back = dist(prev, depot)
   distanceKm += back
-  const durationMinutes = Math.round(clock + (back / avgSpeedKmh) * 60 - startMin)
+  const durationMinutes = Math.round(clock + travelMin(prev, depot, avgSpeedKmh) - startMin)
 
   return {
     id: `${truck.id}-r${round}`,

@@ -210,9 +210,10 @@ saved. Then click **Auto Route**. The optimizer:
    its time windows, and **reinserts** any unassigned stop that now fits. The
    result is **repeatable** (the same input always gives the same plan), then
 4. (if a Mapbox token is set and **Snap routes to real roads** is on) plans on a
-   **real Mapbox road-distance matrix** so the cost, time windows, and stop order
-   are decided on true road distances — not straight-line estimates — then
-   **snaps each route polyline to the roads** and re-prices it with real distance.
+   **real Mapbox road matrix** — cost and stop order use true road **distances**
+   and the arrival times / **time-window checks use true road travel times**
+   (real durations, not a constant speed) — then **snaps each route polyline to
+   the roads** and re-prices it with real distance.
 
 Each **route card** shows truck, driver, partner, round, trip status, volume/
 weight utilization, distance, duration, cost, and estimated **CO₂**.
