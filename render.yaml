@@ -1,0 +1,19 @@
+# Render Blueprint — one web service hosts the built app + the API.
+# 1. Push this repo to GitHub.
+# 2. On render.com: New → Blueprint → pick this repo.
+# 3. Set DATABASE_URL (and optionally VITE_MAPBOX_TOKEN) in the dashboard.
+services:
+  - type: web
+    name: tms-milkrun
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # set as a secret in the Render dashboard
+      - key: VITE_MAPBOX_TOKEN
+        sync: false # optional (build-time); or enter the token in-app under Settings

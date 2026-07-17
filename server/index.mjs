@@ -8,7 +8,11 @@
 import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { seedIfEmpty, reseed } from './seed.mjs'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const PORT = process.env.PORT || 3001
 const conn = (process.env.DATABASE_URL || '').replace(/&?channel_binding=require/, '')
@@ -126,12 +130,20 @@ app.post('/api/seed', async (_req, res) => {
   }
 })
 
+// In production, serve the built frontend from the same origin as the API so a
+// single Node service hosts everything (no separate static host or CORS needed).
+if (process.env.NODE_ENV === 'production' || process.env.SERVE_STATIC === 'true') {
+  const distDir = path.join(__dirname, '..', 'dist')
+  app.use(express.static(distDir))
+  app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(distDir, 'index.html')))
+}
+
 initSchema()
   .then(async () => {
     // The server owns seeding: on first run, insert the real dataset into Neon.
     const seeded = await seedIfEmpty(pool)
     if (seeded) console.log('Seeded Neon with the sample dataset (database was empty).')
-    app.listen(PORT, () => console.log(`TMS API on http://localhost:${PORT} (Neon Postgres)`))
+    app.listen(PORT, () => console.log(`TMS server on http://localhost:${PORT} (Neon Postgres)`))
   })
   .catch((e) => {
     console.error('Failed to initialise schema:', e)

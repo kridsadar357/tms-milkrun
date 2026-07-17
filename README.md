@@ -67,10 +67,39 @@ The map needs a Mapbox access token (free at
 Without a token the app still works (planning uses haversine × 1.3 road factor);
 the map pane shows a hint instead.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push/PR to `main`: **lint → typecheck →
+build** on Node 22.
+
+## Deployment
+
+The app deploys as a **single Node service** — in production the API server also
+serves the built frontend (`dist/`) and provides an SPA fallback, so one origin
+hosts everything (no separate static host, no CORS).
+
+```bash
+npm ci && npm run build   # produce dist/
+npm start                 # NODE_ENV=production node server/index.mjs
+```
+
+Required env var: `DATABASE_URL` (Neon). Optional at build time:
+`VITE_MAPBOX_TOKEN` (the token can also be entered in-app under Settings). The
+host's `PORT` is used automatically.
+
+- **Render** — `render.yaml` blueprint included: New → Blueprint → pick this
+  repo, then set `DATABASE_URL` as a secret.
+- **Docker** (Fly.io / Railway / Cloud Run / any container host):
+
+  ```bash
+  docker build -t tms-milkrun --build-arg VITE_MAPBOX_TOKEN=pk.… .
+  docker run -p 3001:3001 -e DATABASE_URL='postgresql://…' tms-milkrun
+  ```
+
 ## Stack
 
 React 19 · TypeScript · Vite 8 · Tailwind CSS 4 · Mapbox GL JS 3 · Zustand 5 ·
-i18next 26 · lucide-react
+i18next 26 · Express · pg (Neon Postgres)
 
 ## Architecture
 

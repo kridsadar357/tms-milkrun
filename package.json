@@ -9,6 +9,7 @@
     "server": "node --env-file=.env server/index.mjs",
     "seed": "node --env-file=.env server/seed.mjs",
     "build": "tsc -b && vite build",
+    "start": "node server/index.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
