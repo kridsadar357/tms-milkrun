@@ -375,18 +375,22 @@ Click any alert to navigate to the relevant page.
 - **Data Management** (admin only) — **Reset to Sample Data** or **Clear All
   Data**.
 
-### 13.1 Roles & access control
+### 13.1 Sign in, roles & access control
 
-Three roles gate what a session can do:
+The app requires a **login**. Each user has a role, and the role is enforced by
+the server (not just hidden in the UI):
 
 | Role | Can do |
 |------|--------|
-| **Admin** | Everything, including settings, data management, and role changes |
+| **Admin** | Everything, including settings, data management, and reset |
 | **Dispatcher** | Plan routes, run operations, and create billing — but not edit master data or system settings |
-| **Viewer** | Read-only — no create/edit/delete anywhere; exports still allowed |
+| **Viewer** | Read-only — no create/edit/delete anywhere (server rejects writes); exports still allowed |
 
-When a role lacks a capability, the corresponding buttons (Add, Import, Auto
-Route, edit/delete, etc.) are hidden or disabled.
+Default accounts are created on first run — **change these**: `admin/admin`,
+`dispatcher/dispatcher`, `viewer/viewer` (override with `ADMIN_PASSWORD` etc.).
+Sessions use an httpOnly cookie; **Settings → Log out** ends the session. When a
+role lacks a capability, its buttons (Add, Import, Auto Route, edit/delete) are
+hidden, and the API rejects the action if attempted directly.
 
 ### 13.2 Activity Log
 

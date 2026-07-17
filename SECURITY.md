@@ -39,8 +39,8 @@ Automated browser drive of the full business process — **14/14 checks passed**
 
 | # | Finding | Severity | Status |
 |---|---------|----------|--------|
-| 1 | **No authentication** — any client reaching the API can read/write all data | High | Open by design (see note) — mitigations added |
-| 2 | Unauthenticated `POST /api/seed` wipes + reseeds the DB | High | Mitigated (rate-limited); gate in production |
+| 1 | **No authentication** — any client reaching the API could read/write all data | High | **Fixed** — login + httpOnly session cookie; all data endpoints require a valid session |
+| 2 | Unauthenticated `POST /api/seed` wipes + reseeds the DB | High | **Fixed** — admin-only + rate-limited; `DISABLE_RESET=true` fully disables it |
 | 3 | Permissive CORS (`Access-Control-Allow-Origin: *`) | Medium | **Fixed** — disabled in production; allow-list via `ALLOWED_ORIGINS` |
 | 4 | Error/stack disclosure (malformed JSON returned Express stack) | Medium | **Fixed** — generic `{"error":"invalid JSON"}`; no `String(e)` leaks |
 | 5 | No rate limiting on writes | Medium | **Fixed** — 120 writes/min/IP → 429 |
@@ -59,14 +59,23 @@ Automated browser drive of the full business process — **14/14 checks passed**
 | Prototype pollution (`__proto__` in JSON) | Not exploitable — data stored/returned as JSONB, not merged into prototypes |
 | Undefined HTTP methods | Rejected (404) |
 
-**Note on authentication (finding #1).** The app is a public single-page app that
-calls its own API; the role system (admin/dispatcher/viewer) is **client-side UX
-only** — the server accepts any request. For a single-user/internal deployment
-behind a network boundary this is acceptable, and CORS + rate-limiting now block
-the obvious cross-site and abuse vectors. **Before exposing this publicly with
-real/multiple users, add server-side authentication** (session or JWT) and enforce
-roles on the API. Also consider gating `POST /api/seed` behind an env flag in
-production so the sample-data reset isn't publicly callable.
+**Authentication (implemented).** Login (`POST /api/login`) verifies a
+scrypt-hashed password and issues an **HMAC-signed session token in an httpOnly,
+SameSite=Lax cookie** (`Secure` in production). Every data endpoint requires a
+valid session: `GET /api/state` needs any role; `PUT /api/state` requires
+**admin/dispatcher** (viewer is server-enforced read-only); `POST /api/seed` is
+**admin-only** and can be disabled with `DISABLE_RESET=true`. Roles now come from
+the authenticated user, not a client toggle. Default accounts are seeded once
+(`admin/admin`, `dispatcher/dispatcher`, `viewer/viewer`) — **change these** via
+`ADMIN_PASSWORD` / `DISPATCHER_PASSWORD` / `VIEWER_PASSWORD`, and set a strong
+`AUTH_SECRET` in production.
+
+Verified: unauthenticated request → 401; viewer write → 403; viewer seed → 403;
+wrong password → 401; session cookie is httpOnly.
+
+Residual note: `PUT /api/state` replaces the whole document set, so the finer
+dispatcher-vs-admin master-data distinction is still enforced client-side; the
+critical **viewer = read-only** boundary is enforced on the server.
 
 **Hardening env vars**
 - `ALLOWED_ORIGINS` — comma-separated allow-list (else CORS off in production).

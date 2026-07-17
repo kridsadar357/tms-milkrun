@@ -4,7 +4,9 @@ import {
   Banknote, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Moon, Receipt, Route as RouteIcon,
   Settings as SettingsIcon, Sun, TriangleAlert, Truck as TruckIcon, UserRound, Boxes, Package
 } from 'lucide-react'
-import { useTms } from './store'
+import { initStore, useTms } from './store'
+import { me, type AuthUser } from './lib/auth'
+import Login from './components/Login'
 import Dashboard from './pages/Dashboard'
 import Planner from './pages/Planner'
 import Locations from './pages/Locations'
@@ -46,6 +48,21 @@ export default function App() {
   const language = useTms((s) => s.settings.language)
   const theme = useTms((s) => s.settings.theme)
   const [page, setPage] = useState<Page>('dashboard')
+  const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
+
+  // Check for an existing session on load; load the store only once authenticated.
+  useEffect(() => {
+    ;(async () => {
+      const user = await me()
+      if (user) await initStore(user.role)
+      setAuthUser(user)
+    })()
+  }, [])
+
+  const handleLogin = async (user: AuthUser) => {
+    await initStore(user.role)
+    setAuthUser(user)
+  }
 
   // Restore persisted language on first load.
   useEffect(() => {
@@ -56,6 +73,13 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light'
   }, [theme])
+
+  if (authUser === undefined) {
+    return <div className="h-full flex items-center justify-center text-slate-400 text-sm">…</div>
+  }
+  if (authUser === null) {
+    return <Login onLogin={handleLogin} />
+  }
 
   const nav: { id: Page; label: string; icon: ReactNode; section?: string }[] = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={18} /> },

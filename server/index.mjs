@@ -11,6 +11,10 @@ import pg from 'pg'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedIfEmpty, reseed } from './seed.mjs'
+import {
+  clearCookie, findUser, requireAuth, requireRole, seedUsersIfEmpty, sessionCookie,
+  signToken, verifyPassword,
+} from './auth.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -97,12 +101,39 @@ app.get('/api/health', async (_req, res) => {
   try {
     const r = await pool.query('SELECT 1 AS ok')
     res.json({ ok: r.rows[0].ok === 1 })
-  } catch (e) {
+  } catch {
     res.status(500).json({ ok: false })
   }
 })
 
-app.get('/api/state', async (_req, res) => {
+/* ------------------------------ auth ------------------------------ */
+
+app.post('/api/login', rateLimit, async (req, res) => {
+  try {
+    const { username, password } = req.body ?? {}
+    const user = await findUser(pool, username)
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return res.status(401).json({ error: 'invalid credentials' })
+    }
+    const token = signToken({ sub: user.username, role: user.role })
+    res.setHeader('Set-Cookie', sessionCookie(token))
+    res.json({ username: user.username, role: user.role })
+  } catch {
+    res.status(500).json({ error: 'login failed' })
+  }
+})
+
+app.post('/api/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', clearCookie())
+  res.json({ ok: true })
+})
+
+app.get('/api/me', requireAuth, (req, res) => {
+  res.json({ username: req.user.sub, role: req.user.role })
+})
+
+// All data access requires a valid session.
+app.get('/api/state', requireAuth, async (_req, res) => {
   try {
     const entities = await Promise.all(
       ENTITY_TABLES.map((t) => pool.query(`SELECT doc FROM ${t}`)),
@@ -130,7 +161,8 @@ app.get('/api/state', async (_req, res) => {
   }
 })
 
-app.put('/api/state', rateLimit, async (req, res) => {
+// Writes require an authenticated non-viewer (server-enforced read-only viewer).
+app.put('/api/state', rateLimit, requireAuth, requireRole('admin', 'dispatcher'), async (req, res) => {
   const s = req.body ?? {}
   try {
     await withWriteLock(async () => {
@@ -180,7 +212,9 @@ app.put('/api/state', rateLimit, async (req, res) => {
 
 // Re-seed the database with the canonical sample dataset (used by the app's
 // "Reset to Sample Data"). Returns the fresh state so the client can rehydrate.
-app.post('/api/seed', rateLimit, async (_req, res) => {
+// Re-seed is admin-only, and can be disabled entirely in production.
+app.post('/api/seed', rateLimit, requireAuth, requireRole('admin'), async (_req, res) => {
+  if (process.env.DISABLE_RESET === 'true') return res.status(403).json({ error: 'reset disabled' })
   try {
     await withWriteLock(() => reseed(pool))
     res.json({ ok: true })
@@ -202,6 +236,8 @@ initSchema()
     // The server owns seeding: on first run, insert the real dataset into Neon.
     const seeded = await seedIfEmpty(pool)
     if (seeded) console.log('Seeded Neon with the sample dataset (database was empty).')
+    const users = await seedUsersIfEmpty(pool)
+    if (users) console.log('Seeded default users (admin/dispatcher/viewer) — change the passwords.')
     app.listen(PORT, () => console.log(`TMS server on http://localhost:${PORT} (Neon Postgres)`))
   })
   .catch((e) => {

@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Building2, Check, Fuel, History, Moon, ShieldCheck, Sun } from 'lucide-react'
+import { Building2, Check, Fuel, History, LogOut, Moon, ShieldCheck, Sun } from 'lucide-react'
 import { useTms } from '../store'
 import { validateCoords } from '../lib/geo'
-import { can, ROLES } from '../lib/permissions'
+import { can } from '../lib/permissions'
+import { logout } from '../lib/auth'
 import { Badge, Button, Card, Field, PageHeader, Table, inputClass } from '../components/ui'
-import type { Role } from '../types'
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation()
@@ -104,17 +104,21 @@ export default function SettingsPage() {
           </div>
         </Field>
 
-        <Field label={t('roles.label')} hint={t('roles.hint')}>
-          <div className="flex gap-2 mt-1">
-            {ROLES.map((r) => (
-              <Button
-                key={r}
-                variant={settings.role === r ? 'primary' : 'secondary'}
-                onClick={() => updateSettings({ role: r as Role })}
-              >
-                <ShieldCheck size={15} /> {t(`roles.${r}`)}
-              </Button>
-            ))}
+        <Field label={t('auth.signedInAs')}>
+          <div className="flex items-center gap-3 mt-1">
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700">
+              <ShieldCheck size={15} className="text-brand-500" />
+              {t(`roles.${settings.role}`)}
+            </span>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                await logout()
+                window.location.reload()
+              }}
+            >
+              <LogOut size={15} /> {t('auth.logout')}
+            </Button>
           </div>
         </Field>
       </Card>

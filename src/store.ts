@@ -359,10 +359,11 @@ export const useTms = create<TmsState>()((set, get) => ({
       // Re-seed the database with the canonical dataset (server/seed.mjs),
       // then reload the fresh data from Neon into the store.
       resetToSeed: async () => {
+        const role = get().settings.role // keep the logged-in user's role
         await drainSaves() // finish/cancel any pending client save first
         await reseedDatabase()
         const remote = await loadState()
-        if (remote) hydrateFromRemote(remote)
+        if (remote) hydrateFromRemote(remote, role)
       },
       clearAll: () =>
         set({
@@ -395,9 +396,16 @@ function snapshot(s: TmsState) {
 }
 
 let applyingRemote = false
+let subscribed = false
 
-/** Apply a loaded snapshot from Neon into the store (normalising records). */
-function hydrateFromRemote(remote: NonNullable<Awaited<ReturnType<typeof loadState>>>) {
+/**
+ * Apply a loaded snapshot from Neon into the store (normalising records). The
+ * authenticated role always overrides any persisted role in settings.
+ */
+function hydrateFromRemote(
+  remote: NonNullable<Awaited<ReturnType<typeof loadState>>>,
+  authRole?: Settings['role'],
+) {
   applyingRemote = true
   useTms.setState({
     partners: (remote.partners ?? []).map((x) => withPartnerDefaults(x as PartnerInput)),
@@ -409,23 +417,30 @@ function hydrateFromRemote(remote: NonNullable<Awaited<ReturnType<typeof loadSta
     incidents: (remote.incidents ?? []) as Incident[],
     products: (remote.products ?? []) as Product[],
     audit: (remote.audit ?? []) as AuditEntry[],
-    settings: { ...defaultSettings, ...(remote.settings ?? {}) } as Settings,
+    settings: {
+      ...defaultSettings,
+      ...(remote.settings ?? {}),
+      ...(authRole ? { role: authRole } : {}),
+    } as Settings,
     plan: (remote.plan ?? null) as PlanResult | null,
   })
   applyingRemote = false
 }
 
 /**
- * Load real data from Neon (the API server seeds the database on first run),
- * then keep the store in sync. Safe to call once at app startup.
+ * Load real data from Neon after login, applying the authenticated role, then
+ * keep the store in sync. Safe to call again on re-login.
  */
-export async function initStore(): Promise<void> {
+export async function initStore(authRole?: Settings['role']): Promise<void> {
   const remote = await loadState()
-  if (remote) hydrateFromRemote(remote)
+  if (remote) hydrateFromRemote(remote, authRole)
 
-  useTms.subscribe((s) => {
-    if (!applyingRemote) saveState(snapshot(s))
-  })
+  if (!subscribed) {
+    subscribed = true
+    useTms.subscribe((s) => {
+      if (!applyingRemote) saveState(snapshot(s))
+    })
+  }
 }
 
 /** Token entered in Settings wins; falls back to the .env token. */

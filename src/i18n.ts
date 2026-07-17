@@ -3,6 +3,16 @@ import { initReactI18next } from 'react-i18next'
 
 const en = {
   app: { title: 'TMS Milkrun', subtitle: 'Transport Management System' },
+  auth: {
+    signIn: 'Sign in',
+    signingIn: 'Signing in…',
+    username: 'Username',
+    password: 'Password',
+    invalid: 'Invalid username or password',
+    demoHint: 'Demo: admin / admin · dispatcher / dispatcher · viewer / viewer',
+    signedInAs: 'Signed in as',
+    logout: 'Log out',
+  },
   nav: {
     dashboard: 'Dashboard',
     planner: 'Route Planner',
@@ -434,6 +444,16 @@ const en = {
 /** Thai translations — mirrors the EN structure. */
 const th: typeof en = {
   app: { title: 'TMS มิลค์รัน', subtitle: 'ระบบบริหารจัดการการขนส่ง' },
+  auth: {
+    signIn: 'เข้าสู่ระบบ',
+    signingIn: 'กำลังเข้าสู่ระบบ…',
+    username: 'ชื่อผู้ใช้',
+    password: 'รหัสผ่าน',
+    invalid: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+    demoHint: 'ทดลอง: admin / admin · dispatcher / dispatcher · viewer / viewer',
+    signedInAs: 'เข้าสู่ระบบในชื่อ',
+    logout: 'ออกจากระบบ',
+  },
   nav: {
     dashboard: 'แดชบอร์ด',
     planner: 'วางแผนเส้นทาง',

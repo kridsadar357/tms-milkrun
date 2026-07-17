@@ -32,11 +32,22 @@ npm install
 npm run dev     # runs BOTH the API server (:3001) and the web app (:5173)
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173 and **sign in**. Default accounts (seeded on first
+run — **change them**): `admin/admin`, `dispatcher/dispatcher`, `viewer/viewer`.
 
 > `npm run dev` uses `concurrently` to start the Neon-backed API server and the
 > Vite dev server together. Use `npm run web` or `npm run server` to run them
 > separately.
+
+## Authentication & roles
+
+The API is session-authenticated: login (`POST /api/login`) verifies a
+scrypt-hashed password and sets an **httpOnly session cookie**; all data
+endpoints require it. Roles come from the logged-in user and are enforced
+server-side — **viewer is read-only**, **dispatcher** can plan/operate/bill,
+**admin** can do everything (including reset). Set a strong `AUTH_SECRET` and
+change the default passwords (`ADMIN_PASSWORD`, …) in production. See
+[`SECURITY.md`](SECURITY.md).
 
 ## Data & persistence (Neon Postgres)
 
