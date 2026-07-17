@@ -27,10 +27,11 @@ const drivers = [
 ]
 
 const trucks = [
-  { id: 't1', plateNumber: '70-1234 ชบ', type: '6W', partnerId: 'p1', capacityM3: 22, capacityKg: 5500, roundsPerDay: 2, fixedCostPerRound: 1200, costPerKm: 10, active: true },
-  { id: 't2', plateNumber: '70-5678 ชบ', type: '6W', partnerId: 'p1', capacityM3: 22, capacityKg: 5500, roundsPerDay: 2, fixedCostPerRound: 1200, costPerKm: 10, active: true },
-  { id: 't3', plateNumber: '83-4455 รย', type: '10W', partnerId: 'p2', capacityM3: 38, capacityKg: 12000, roundsPerDay: 1, fixedCostPerRound: 1800, costPerKm: 14, active: true },
-  { id: 't4', plateNumber: '1ฒค-9012 กท', type: '4W', partnerId: 'p3', capacityM3: 8, capacityKg: 2000, roundsPerDay: 3, fixedCostPerRound: 800, costPerKm: 7, active: true },
+  // t1 runs a FIXED cyclic route around the Chonburi cluster (cyclic rotation).
+  { id: 't1', plateNumber: '70-1234 ชบ', type: '6W', partnerId: 'p1', capacityM3: 22, capacityKg: 5500, roundsPerDay: 2, fixedCostPerRound: 1200, costPerKm: 10, active: true, assignmentMode: 'fixed', fixedStops: ['l1', 'l2', 'l3', 'l4'] },
+  { id: 't2', plateNumber: '70-5678 ชบ', type: '6W', partnerId: 'p1', capacityM3: 22, capacityKg: 5500, roundsPerDay: 2, fixedCostPerRound: 1200, costPerKm: 10, active: true, assignmentMode: 'dynamic', fixedStops: [] },
+  { id: 't3', plateNumber: '83-4455 รย', type: '10W', partnerId: 'p2', capacityM3: 38, capacityKg: 12000, roundsPerDay: 1, fixedCostPerRound: 1800, costPerKm: 14, active: true, assignmentMode: 'dynamic', fixedStops: [] },
+  { id: 't4', plateNumber: '1ฒค-9012 กท', type: '4W', partnerId: 'p3', capacityM3: 8, capacityKg: 2000, roundsPerDay: 3, fixedCostPerRound: 800, costPerKm: 7, active: true, assignmentMode: 'dynamic', fixedStops: [] },
 ]
 
 const locations = [

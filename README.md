@@ -9,6 +9,10 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
   respecting **both m³ and kg** capacity per truck, with **multiple rounds per day**.
   Optionally snaps routes to real roads via **Mapbox Directions** (real distance,
   duration, and cost re-pricing).
+- **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
+  rotation) or is assigned **dynamically** by the optimizer.
+- **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading
+  efficiency, time-window compliance, returnable packaging, and flexibility.
 - **Mapbox GL JS v3 map** — depot, delivery locations, and color-coded route lines
   with click-to-highlight per route and stop-sequence details (ETA per stop).
 - **Master data**

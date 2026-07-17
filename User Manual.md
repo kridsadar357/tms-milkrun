@@ -153,6 +153,11 @@ Plate number, type (4W / 4WJ / 6W / 10W / Trailer, with capacity presets),
 transport partner, **capacity (m³ + kg)**, **rounds per day**, fixed cost per
 round, and cost per km. The assigned **driver** is shown automatically.
 
+**Assignment mode** (milkrun): each truck is either **Dynamic** (the optimizer
+assigns its stops each plan) or **Fixed** — a **cyclic route** where you pick the
+stops the truck always runs. Fixed trucks keep their loop every plan (cyclic
+rotation, short lead-time, stable communication); dynamic trucks absorb the rest.
+
 ### 4.3 Drivers
 
 Code, EN/TH name, license number and class (e.g. ท.2 / บ.2), phone, and the
@@ -282,6 +287,23 @@ CSV.
 A pivot of the current plan’s cost, grouped **By Partner / By Truck / By Route**.
 Shows fixed vs. variable cost, THB per m³, the **daily total**, and a **×22-day
 monthly estimate**. Export to Excel.
+
+## 8a. Milkrun Analytics
+
+The **Analytics** page turns the current plan into milkrun KPIs and charts (CSV
+export included). Top tiles cover the four principles — **Cyclic Rotation**
+(share of fixed cyclic routes), **Short Lead-Time** (avg/max route duration),
+**Loading Efficiency** (volume utilization), and **Flexible to Change**. Below:
+
+- **Truck Routing** — routes, stops, distance, and utilization per truck, with
+  fixed/dynamic mode.
+- **Time Windows** — % of stops whose planned arrival falls within their window,
+  plus on-time / late / early from PODs.
+- **Load Optimization** — m³ and kg utilization per route.
+- **Returnable Packaging** — returnable (wooden/plastic pallets that must cycle
+  back to the depot) vs. one-way, derived from the Products master.
+- **Flexibility & Communication** — delivery completion, failed deliveries, open
+  incidents, and CO₂.
 
 ---
 

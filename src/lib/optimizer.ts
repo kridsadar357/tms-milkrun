@@ -57,19 +57,39 @@ export function planRoutes({
       servesDay(l, dayOfWeek),
   )
 
-  // One slot per truck round, biggest trucks first so dense clusters land on them.
-  const slots: TripSlot[] = trucks
-    .filter((t) => t.active)
-    .flatMap((t) => Array.from({ length: Math.max(1, t.roundsPerDay) }, (_, i) => ({ truck: t, round: i + 1 })))
-    .filter((s) => !usedSlots.has(`${s.truck.id}-r${s.round}`))
-    .sort((a, b) => b.truck.capacityM3 - a.truck.capacityM3 || a.round - b.round)
-
   // Sweep: order stops by polar angle around the depot.
   const swept = [...active].sort((a, b) => bearingDeg(depot, a) - bearingDeg(depot, b))
 
   const remaining = new Set(swept.map((l) => l.id))
   const byId = new Map(swept.map((l) => [l.id, l]))
+
+  // Fixed trucks run their own preset cycle (cyclic rotation), consuming those
+  // stops before the optimizer assigns the rest to dynamic trucks.
+  const fixedRoutes: PlannedRoute[] = []
+  const fixedTruckIds = new Set<string>()
+  for (const truck of trucks.filter(
+    (t) => t.active && t.assignmentMode === 'fixed' && (t.fixedStops?.length ?? 0) > 0,
+  )) {
+    fixedTruckIds.add(truck.id)
+    if (usedSlots.has(`${truck.id}-r1`)) continue // its cycle is already a locked route
+    const stops = (truck.fixedStops ?? [])
+      .map((id) => byId.get(id))
+      .filter((l): l is DeliveryLocation => !!l && remaining.has(l.id))
+    if (stops.length === 0) continue
+    stops.forEach((l) => remaining.delete(l.id))
+    const ordered = twoOpt(nearestNeighbour(stops, depot), depot)
+    fixedRoutes.push(buildRoute(truck, 1, ordered, depot, avgSpeedKmh, lockedRoutes.length + fixedRoutes.length))
+  }
+
+  // One slot per DYNAMIC truck round, biggest trucks first.
+  const slots: TripSlot[] = trucks
+    .filter((t) => t.active && !fixedTruckIds.has(t.id))
+    .flatMap((t) => Array.from({ length: Math.max(1, t.roundsPerDay) }, (_, i) => ({ truck: t, round: i + 1 })))
+    .filter((s) => !usedSlots.has(`${s.truck.id}-r${s.round}`))
+    .sort((a, b) => b.truck.capacityM3 - a.truck.capacityM3 || a.round - b.round)
+
   const newRoutes: PlannedRoute[] = []
+  const colorBase = lockedRoutes.length + fixedRoutes.length
 
   for (const slot of slots) {
     if (remaining.size === 0) break
@@ -94,12 +114,12 @@ export function planRoutes({
     picked.forEach((l) => remaining.delete(l.id))
 
     const ordered = twoOpt(nearestNeighbour(picked, depot), depot)
-    // New routes get colours after the locked ones so nothing collides.
-    newRoutes.push(buildRoute(truck, round, ordered, depot, avgSpeedKmh, lockedRoutes.length + newRoutes.length))
+    // New routes get colours after the locked + fixed ones so nothing collides.
+    newRoutes.push(buildRoute(truck, round, ordered, depot, avgSpeedKmh, colorBase + newRoutes.length))
   }
 
   return {
-    routes: [...lockedRoutes, ...newRoutes],
+    routes: [...lockedRoutes, ...fixedRoutes, ...newRoutes],
     unassignedLocationIds: [...remaining].filter((id) => byId.has(id)),
     plannedAt: new Date().toISOString(),
   }

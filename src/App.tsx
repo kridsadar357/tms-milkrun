@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Banknote, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Moon, Receipt, Route as RouteIcon,
+  Banknote, BarChart3, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Moon, Receipt, Route as RouteIcon,
   Settings as SettingsIcon, ShieldCheck, Sun, TriangleAlert, Truck as TruckIcon, UserRound, Boxes, Package
 } from 'lucide-react'
 import { initStore, useTms } from './store'
@@ -16,6 +16,7 @@ import Trucks from './pages/Trucks'
 import Drivers from './pages/Drivers'
 import Partners from './pages/Partners'
 import Costs from './pages/Costs'
+import Analytics from './pages/Analytics'
 import Payments from './pages/Payments'
 import Operations from './pages/Operations'
 import Incidents from './pages/Incidents'
@@ -27,7 +28,7 @@ import AlertCenter from './components/AlertCenter'
 
 type Page =
   | 'dashboard' | 'planner' | 'visualTruck' | 'operations' | 'incidents' | 'locations'
-  | 'trucks' | 'drivers' | 'partners' | 'costs' | 'payments' | 'settings' | 'products' | 'users'
+  | 'trucks' | 'drivers' | 'partners' | 'costs' | 'analytics' | 'payments' | 'settings' | 'products' | 'users'
 
 const PAGES: Record<Page, () => ReactNode> = {
   dashboard: () => <Dashboard />,
@@ -40,6 +41,7 @@ const PAGES: Record<Page, () => ReactNode> = {
   drivers: () => <Drivers />,
   partners: () => <Partners />,
   costs: () => <Costs />,
+  analytics: () => <Analytics />,
   payments: () => <Payments />,
   settings: () => <SettingsPage />,
   products: () => <Products />,
@@ -90,6 +92,7 @@ export default function App() {
     { id: 'dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={18} /> },
     { id: 'planner', label: t('nav.planner'), icon: <RouteIcon size={18} /> },
     { id: 'costs', label: t('nav.costs'), icon: <Banknote size={18} /> },
+    { id: 'analytics', label: t('nav.analytics'), icon: <BarChart3 size={18} /> },
     { id: 'payments', label: t('nav.payments'), icon: <Receipt size={18} /> },
     { id: 'operations', label: t('nav.operations'), icon: <ClipboardCheck size={18} />, section: t('nav.ops') },
     { id: 'visualTruck', label: t('nav.visualTruck'), icon: <Boxes size={18} /> },

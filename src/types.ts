@@ -33,6 +33,8 @@ export interface Driver {
 
 export type TruckType = '4W' | '4WJ' | '6W' | '10W' | 'Trailer'
 
+export type AssignmentMode = 'dynamic' | 'fixed'
+
 export interface Truck {
   id: string
   plateNumber: string
@@ -44,6 +46,10 @@ export interface Truck {
   fixedCostPerRound: number // THB per round (driver + fixed)
   costPerKm: number // THB per km (fuel + variable)
   active: boolean
+  // Milkrun assignment: 'fixed' runs the same cyclic route (fixedStops) every
+  // plan; 'dynamic' (default) is assigned by the optimizer.
+  assignmentMode?: AssignmentMode
+  fixedStops?: string[] // location ids forming the fixed cycle
 }
 
 export type LocationKind = 'supplier' | 'plant' | 'warehouse' | 'customer'

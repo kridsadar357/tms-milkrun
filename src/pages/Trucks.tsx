@@ -5,7 +5,7 @@ import { newId, useTms } from '../store'
 import {
   Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
 } from '../components/ui'
-import type { Truck, TruckType } from '../types'
+import type { AssignmentMode, Truck, TruckType } from '../types'
 
 const TYPES: TruckType[] = ['4W', '4WJ', '6W', '10W', 'Trailer']
 
@@ -22,11 +22,12 @@ const emptyForm = {
   plateNumber: '', type: '6W' as TruckType, partnerId: '',
   capacityM3: '22', capacityKg: '5500', roundsPerDay: '1',
   fixedCostPerRound: '1200', costPerKm: '10', active: true,
+  assignmentMode: 'dynamic' as AssignmentMode, fixedStops: [] as string[],
 }
 
 export default function Trucks() {
   const { t, i18n } = useTranslation()
-  const { trucks, partners, drivers, upsertTruck, deleteTruck } = useTms()
+  const { trucks, partners, drivers, locations, upsertTruck, deleteTruck } = useTms()
   const [editing, setEditing] = useState<Truck | 'new' | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -48,6 +49,8 @@ export default function Trucks() {
             roundsPerDay: String(truck.roundsPerDay),
             fixedCostPerRound: String(truck.fixedCostPerRound), costPerKm: String(truck.costPerKm),
             active: truck.active,
+            assignmentMode: truck.assignmentMode ?? 'dynamic',
+            fixedStops: truck.fixedStops ?? [],
           },
     )
     setEditing(truck)
@@ -76,6 +79,8 @@ export default function Trucks() {
       fixedCostPerRound: Math.max(0, Number(form.fixedCostPerRound) || 0),
       costPerKm: Math.max(0, Number(form.costPerKm) || 0),
       active: form.active,
+      assignmentMode: form.assignmentMode,
+      fixedStops: form.assignmentMode === 'fixed' ? form.fixedStops : [],
     })
     setEditing(null)
   }
@@ -94,16 +99,24 @@ export default function Trucks() {
       <Card>
         <Table
           headers={[
-            t('trucks.plate'), t('trucks.type'), t('trucks.partner'), t('trucks.driver'),
-            t('trucks.capacity'), t('trucks.roundsPerDay'), t('trucks.fixedCost'), t('trucks.costPerKm'),
-            t('common.status'), t('common.actions'),
+            t('trucks.plate'), t('trucks.type'), t('trucks.assignmentMode'), t('trucks.partner'),
+            t('trucks.driver'), t('trucks.capacity'), t('trucks.roundsPerDay'), t('trucks.fixedCost'),
+            t('trucks.costPerKm'), t('common.status'), t('common.actions'),
           ]}
         >
-          {trucks.length === 0 && <EmptyRow colSpan={10} message={t('common.noData')} />}
+          {trucks.length === 0 && <EmptyRow colSpan={11} message={t('common.noData')} />}
           {trucks.map((tr) => (
             <tr key={tr.id} className="hover:bg-slate-50">
               <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{tr.plateNumber}</td>
               <td className="px-4 py-3"><Badge tone="slate">{tr.type}</Badge></td>
+              <td className="px-4 py-3">
+                <Badge tone={tr.assignmentMode === 'fixed' ? 'green' : 'blue'}>
+                  {t(`analytics.${tr.assignmentMode === 'fixed' ? 'fixed' : 'dynamic'}`)}
+                  {tr.assignmentMode === 'fixed' && (tr.fixedStops?.length ?? 0) > 0
+                    ? ` · ${tr.fixedStops!.length}`
+                    : ''}
+                </Badge>
+              </td>
               <td className="px-4 py-3 text-slate-600">{partnerName(tr.partnerId)}</td>
               <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{driverName(tr.id)}</td>
               <td className="px-4 py-3 whitespace-nowrap">
@@ -175,6 +188,53 @@ export default function Trucks() {
               {t('common.active')}
             </label>
           </div>
+
+          {/* Milkrun assignment mode */}
+          <div className="mt-5">
+            <Field label={t('trucks.assignmentMode')}>
+              <select
+                className={inputClass}
+                value={form.assignmentMode}
+                onChange={(e) => setForm({ ...form, assignmentMode: e.target.value as AssignmentMode })}
+              >
+                <option value="dynamic">{t('trucks.dynamic')}</option>
+                <option value="fixed">{t('trucks.fixed')}</option>
+              </select>
+            </Field>
+
+            {form.assignmentMode === 'fixed' && (
+              <div className="mt-3">
+                <span className="block text-sm font-medium text-slate-700 mb-1">{t('trucks.fixedStops')}</span>
+                <p className="text-xs text-slate-500 mb-2">{t('trucks.fixedStopsHint')}</p>
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+                  {locations.filter((l) => l.active).map((l) => {
+                    const on = form.fixedStops.includes(l.id)
+                    return (
+                      <label key={l.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              fixedStops: e.target.checked
+                                ? [...form.fixedStops, l.id]
+                                : form.fixedStops.filter((x) => x !== l.id),
+                            })
+                          }
+                        />
+                        <span className="font-medium">{l.code}</span>
+                        <span className="text-slate-500 truncate">
+                          {i18n.language === 'th' ? l.nameTh || l.name : l.name}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 mt-6">
             <Button variant="secondary" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
             <Button onClick={submit}>{t('common.save')}</Button>
