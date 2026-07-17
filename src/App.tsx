@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Banknote, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Moon, Receipt, Route as RouteIcon,
-  Settings as SettingsIcon, Sun, TriangleAlert, Truck as TruckIcon, UserRound, Boxes, Package
+  Settings as SettingsIcon, ShieldCheck, Sun, TriangleAlert, Truck as TruckIcon, UserRound, Boxes, Package
 } from 'lucide-react'
 import { initStore, useTms } from './store'
 import { me, type AuthUser } from './lib/auth'
+import { can } from './lib/permissions'
 import Login from './components/Login'
 import Dashboard from './pages/Dashboard'
 import Planner from './pages/Planner'
@@ -19,13 +20,14 @@ import Payments from './pages/Payments'
 import Operations from './pages/Operations'
 import Incidents from './pages/Incidents'
 import SettingsPage from './pages/SettingsPage'
+import Users from './pages/Users'
 // 3D Visual Truck simulator
 import VisualTruck from './pages/VisualTruck'
 import AlertCenter from './components/AlertCenter'
 
 type Page =
   | 'dashboard' | 'planner' | 'visualTruck' | 'operations' | 'incidents' | 'locations'
-  | 'trucks' | 'drivers' | 'partners' | 'costs' | 'payments' | 'settings' | 'products'
+  | 'trucks' | 'drivers' | 'partners' | 'costs' | 'payments' | 'settings' | 'products' | 'users'
 
 const PAGES: Record<Page, () => ReactNode> = {
   dashboard: () => <Dashboard />,
@@ -41,12 +43,14 @@ const PAGES: Record<Page, () => ReactNode> = {
   payments: () => <Payments />,
   settings: () => <SettingsPage />,
   products: () => <Products />,
+  users: () => <Users />,
 }
 
 export default function App() {
   const { t, i18n } = useTranslation()
   const language = useTms((s) => s.settings.language)
   const theme = useTms((s) => s.settings.theme)
+  const role = useTms((s) => s.settings.role)
   const [page, setPage] = useState<Page>('dashboard')
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
 
@@ -81,7 +85,8 @@ export default function App() {
     return <Login onLogin={handleLogin} />
   }
 
-  const nav: { id: Page; label: string; icon: ReactNode; section?: string }[] = [
+  const isAdmin = can(role, 'admin')
+  const allNav: { id: Page; label: string; icon: ReactNode; section?: string; adminOnly?: boolean }[] = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={18} /> },
     { id: 'planner', label: t('nav.planner'), icon: <RouteIcon size={18} /> },
     { id: 'costs', label: t('nav.costs'), icon: <Banknote size={18} /> },
@@ -94,8 +99,10 @@ export default function App() {
     { id: 'trucks', label: t('nav.trucks'), icon: <TruckIcon size={18} /> },
     { id: 'drivers', label: t('nav.drivers'), icon: <UserRound size={18} /> },
     { id: 'partners', label: t('nav.partners'), icon: <Handshake size={18} /> },
+    { id: 'users', label: t('nav.users'), icon: <ShieldCheck size={18} />, section: t('nav.admin'), adminOnly: true },
     { id: 'settings', label: t('nav.settings'), icon: <SettingsIcon size={18} /> },
   ]
+  const nav = allNav.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <div className="h-full flex">

@@ -392,14 +392,22 @@ Sessions use an httpOnly cookie; **Settings → Log out** ends the session. When
 role lacks a capability, its buttons (Add, Import, Auto Route, edit/delete) are
 hidden, and the API rejects the action if attempted directly.
 
-### 13.2 Activity Log
+### 13.2 User management (admin only)
+
+Admins get a **Users** page (Administration section of the sidebar) to **add**
+users (username, role, password), **change** a user's role or reset their
+password, and **delete** users. Safeguards prevent deleting your own account or
+removing the last admin. Passwords are stored scrypt-hashed; the plaintext is
+never shown or returned.
+
+### 13.3 Activity Log
 
 Every create / update / delete of master data, every billing action, and every
 settings change is recorded with a timestamp and the acting role. The **Activity
 Log** in Settings shows the most recent entries; the full log is persisted in the
 database.
 
-### 13.3 CSV import
+### 13.4 CSV import
 
 **Delivery Locations** supports **Import CSV** (admin/dispatcher). Use the same
 column headers as the CSV export (`Code, Name, NameTH, Kind, Zone, Lat, Lng,

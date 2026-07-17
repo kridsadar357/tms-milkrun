@@ -124,3 +124,37 @@ export async function findUser(pool, username) {
   const { rows } = await pool.query(`SELECT doc FROM users WHERE username = $1`, [String(username)])
   return rows[0]?.doc ?? null
 }
+
+export const ROLES = ['admin', 'dispatcher', 'viewer']
+
+/** List users without password hashes. */
+export async function listUsers(pool) {
+  const { rows } = await pool.query(`SELECT doc FROM users ORDER BY username`)
+  return rows.map((r) => ({ username: r.doc.username, role: r.doc.role }))
+}
+
+export async function countAdmins(pool) {
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM users WHERE doc->>'role' = 'admin'`)
+  return rows[0].n
+}
+
+export async function createUser(pool, { username, role, password }) {
+  const u = String(username).trim()
+  await pool.query(`INSERT INTO users (username, doc) VALUES ($1, $2)`, [
+    u,
+    JSON.stringify({ username: u, role, passwordHash: hashPassword(password) }),
+  ])
+}
+
+export async function updateUser(pool, username, { role, password }) {
+  const existing = await findUser(pool, username)
+  if (!existing) return false
+  const doc = { ...existing, role: role ?? existing.role }
+  if (password) doc.passwordHash = hashPassword(password)
+  await pool.query(`UPDATE users SET doc = $2 WHERE username = $1`, [username, JSON.stringify(doc)])
+  return true
+}
+
+export async function deleteUser(pool, username) {
+  await pool.query(`DELETE FROM users WHERE username = $1`, [username])
+}

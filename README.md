@@ -45,9 +45,10 @@ The API is session-authenticated: login (`POST /api/login`) verifies a
 scrypt-hashed password and sets an **httpOnly session cookie**; all data
 endpoints require it. Roles come from the logged-in user and are enforced
 server-side — **viewer is read-only**, **dispatcher** can plan/operate/bill,
-**admin** can do everything (including reset). Set a strong `AUTH_SECRET` and
-change the default passwords (`ADMIN_PASSWORD`, …) in production. See
-[`SECURITY.md`](SECURITY.md).
+**admin** can do everything (including reset). Admins get a **Users** page to
+add/edit/delete accounts and reset passwords (can't remove yourself or the last
+admin). Set a strong `AUTH_SECRET` and change the default passwords
+(`ADMIN_PASSWORD`, …) in production. See [`SECURITY.md`](SECURITY.md).
 
 ## Data & persistence (Neon Postgres)
 

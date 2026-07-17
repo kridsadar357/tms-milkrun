@@ -40,3 +40,55 @@ export async function logout(): Promise<void> {
     /* ignore */
   }
 }
+
+/* -------------------------- user management (admin) ------------------ */
+
+export interface ManagedUser {
+  username: string
+  role: Role
+}
+
+type Result = { ok: true } | { ok: false; error?: string }
+
+async function toResult(res: Response): Promise<Result> {
+  if (res.ok) return { ok: true }
+  const body = (await res.json().catch(() => ({}))) as { error?: string }
+  return { ok: false, error: body.error }
+}
+
+export async function listUsers(): Promise<ManagedUser[]> {
+  try {
+    const res = await fetch('/api/users')
+    if (!res.ok) return []
+    return (await res.json()) as ManagedUser[]
+  } catch {
+    return []
+  }
+}
+
+export async function createUser(username: string, role: Role, password: string): Promise<Result> {
+  return toResult(
+    await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, role, password }),
+    }),
+  )
+}
+
+export async function updateUser(
+  username: string,
+  patch: { role?: Role; password?: string },
+): Promise<Result> {
+  return toResult(
+    await fetch(`/api/users/${encodeURIComponent(username)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }),
+  )
+}
+
+export async function deleteUser(username: string): Promise<Result> {
+  return toResult(await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' }))
+}

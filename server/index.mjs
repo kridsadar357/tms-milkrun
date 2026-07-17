@@ -12,8 +12,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedIfEmpty, reseed } from './seed.mjs'
 import {
-  clearCookie, findUser, requireAuth, requireRole, seedUsersIfEmpty, sessionCookie,
-  signToken, verifyPassword,
+  ROLES, clearCookie, countAdmins, createUser, deleteUser, findUser, listUsers, requireAuth,
+  requireRole, seedUsersIfEmpty, sessionCookie, signToken, updateUser, verifyPassword,
 } from './auth.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -130,6 +130,63 @@ app.post('/api/logout', (_req, res) => {
 
 app.get('/api/me', requireAuth, (req, res) => {
   res.json({ username: req.user.sub, role: req.user.role })
+})
+
+/* -------------------------- user management ------------------------ */
+// All admin-only.
+
+app.get('/api/users', requireAuth, requireRole('admin'), async (_req, res) => {
+  try {
+    res.json(await listUsers(pool))
+  } catch {
+    res.status(500).json({ error: 'failed' })
+  }
+})
+
+app.post('/api/users', rateLimit, requireAuth, requireRole('admin'), async (req, res) => {
+  const { username, role, password } = req.body ?? {}
+  if (!username?.trim() || !password) return res.status(400).json({ error: 'username and password required' })
+  if (!ROLES.includes(role)) return res.status(400).json({ error: 'invalid role' })
+  try {
+    if (await findUser(pool, username.trim())) return res.status(409).json({ error: 'user already exists' })
+    await createUser(pool, { username, role, password })
+    res.json({ ok: true })
+  } catch {
+    res.status(500).json({ error: 'failed' })
+  }
+})
+
+app.put('/api/users/:username', rateLimit, requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username
+  const { role, password } = req.body ?? {}
+  if (role && !ROLES.includes(role)) return res.status(400).json({ error: 'invalid role' })
+  try {
+    const existing = await findUser(pool, target)
+    if (!existing) return res.status(404).json({ error: 'not found' })
+    if (role && role !== 'admin' && existing.role === 'admin' && (await countAdmins(pool)) <= 1) {
+      return res.status(400).json({ error: 'cannot demote the last admin' })
+    }
+    await updateUser(pool, target, { role, password })
+    res.json({ ok: true })
+  } catch {
+    res.status(500).json({ error: 'failed' })
+  }
+})
+
+app.delete('/api/users/:username', rateLimit, requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username
+  if (target === req.user.sub) return res.status(400).json({ error: 'cannot delete your own account' })
+  try {
+    const existing = await findUser(pool, target)
+    if (!existing) return res.status(404).json({ error: 'not found' })
+    if (existing.role === 'admin' && (await countAdmins(pool)) <= 1) {
+      return res.status(400).json({ error: 'cannot delete the last admin' })
+    }
+    await deleteUser(pool, target)
+    res.json({ ok: true })
+  } catch {
+    res.status(500).json({ error: 'failed' })
+  }
 })
 
 // All data access requires a valid session.
