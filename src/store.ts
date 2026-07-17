@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { loadState, reseedDatabase, saveState } from './lib/api'
+import { drainSaves, loadState, reseedDatabase, saveState } from './lib/api'
 import type {
   AuditAction,
   AuditEntry,
@@ -340,8 +340,15 @@ export const useTms = create<TmsState>()((set, get) => ({
 
       upsertPod: (p) => set((s) => ({ pods: upsert(s.pods, p) })),
       deletePod: (id) => set((s) => ({ pods: s.pods.filter((x) => x.id !== id) })),
-      upsertIncident: (i) => set((s) => ({ incidents: upsert(s.incidents, i) })),
-      deleteIncident: (id) => set((s) => ({ incidents: s.incidents.filter((x) => x.id !== id) })),
+      upsertIncident: (i) => {
+        const existed = get().incidents.some((x) => x.id === i.id)
+        set((s) => ({ incidents: upsert(s.incidents, i) }))
+        get().logAudit(existed ? 'update' : 'create', 'incident', `${i.type} (${i.severity})`)
+      },
+      deleteIncident: (id) => {
+        set((s) => ({ incidents: s.incidents.filter((x) => x.id !== id) }))
+        get().logAudit('delete', 'incident', id)
+      },
 
       updateSettings: (patch) => {
         set((s) => ({ settings: { ...s.settings, ...patch } }))
@@ -352,6 +359,7 @@ export const useTms = create<TmsState>()((set, get) => ({
       // Re-seed the database with the canonical dataset (server/seed.mjs),
       // then reload the fresh data from Neon into the store.
       resetToSeed: async () => {
+        await drainSaves() // finish/cancel any pending client save first
         await reseedDatabase()
         const remote = await loadState()
         if (remote) hydrateFromRemote(remote)

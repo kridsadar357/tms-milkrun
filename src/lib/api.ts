@@ -79,3 +79,18 @@ async function flush() {
     }
   }
 }
+
+/**
+ * Cancel any scheduled save and wait for an in-flight one to finish. Used
+ * before a reseed so a stale client save can't land after it and clobber the
+ * fresh data.
+ */
+export async function drainSaves(): Promise<void> {
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
+  }
+  dirty = false
+  latest = null
+  while (inFlight) await new Promise((r) => setTimeout(r, 20))
+}

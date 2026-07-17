@@ -25,6 +25,10 @@ const pool = new pg.Pool({
   connectionString: conn,
   ssl: { rejectUnauthorized: false },
   max: 5,
+  // Hardening: a stuck query can never wedge the write lock indefinitely.
+  statement_timeout: 15_000,
+  query_timeout: 20_000,
+  connectionTimeoutMillis: 10_000,
 })
 
 const ENTITY_TABLES = ['partners', 'trucks', 'drivers', 'locations', 'billings', 'pods', 'incidents', 'products']
@@ -37,15 +41,64 @@ async function initSchema() {
 }
 
 const app = express()
-app.use(cors())
+app.disable('x-powered-by') // don't advertise the framework
+
+// Security headers (a lightweight subset of what helmet provides).
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  next()
+})
+
+// CORS: the production app is same-origin (the server serves the frontend), so
+// cross-origin access is only enabled in dev, or for an explicit allow-list.
+const allowOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
+if (allowOrigins.length) app.use(cors({ origin: allowOrigins }))
+else if (process.env.NODE_ENV !== 'production') app.use(cors())
+
 app.use(express.json({ limit: '8mb' }))
+
+// Basic in-memory rate limit on writes (per-IP), to blunt abuse of the
+// unauthenticated write/seed endpoints.
+const hits = new Map()
+function rateLimit(req, res, next) {
+  const now = Date.now()
+  const ip = req.ip || 'anon'
+  const win = hits.get(ip)?.filter((t) => now - t < 60_000) ?? []
+  if (win.length >= 120) return res.status(429).json({ error: 'rate limited' })
+  win.push(now)
+  hits.set(ip, win)
+  next()
+}
+
+// Reject malformed JSON with a clean 400 instead of an Express stack trace.
+app.use((err, _req, res, next) => {
+  if (err?.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+    return res.status(400).json({ error: 'invalid JSON' })
+  }
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'payload too large' })
+  next(err)
+})
+
+// Serialize all write transactions so a full-state PUT and a reseed never run
+// concurrent DELETE+INSERT on the same tables (which would deadlock / 500).
+let writeChain = Promise.resolve()
+function withWriteLock(fn) {
+  const run = writeChain.then(fn, fn)
+  writeChain = run.then(
+    () => {},
+    () => {},
+  )
+  return run
+}
 
 app.get('/api/health', async (_req, res) => {
   try {
     const r = await pool.query('SELECT 1 AS ok')
     res.json({ ok: r.rows[0].ok === 1 })
   } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) })
+    res.status(500).json({ ok: false })
   }
 })
 
@@ -73,60 +126,66 @@ app.get('/api/state', async (_req, res) => {
       plan: byKey.plan ?? null,
     })
   } catch (e) {
-    res.status(500).json({ error: String(e) })
+    res.status(500).json({ error: 'load failed' })
   }
 })
 
-app.put('/api/state', async (req, res) => {
+app.put('/api/state', rateLimit, async (req, res) => {
   const s = req.body ?? {}
-  const client = await pool.connect()
   try {
-    await client.query('BEGIN')
-    const arrays = {
-      partners: s.partners,
-      trucks: s.trucks,
-      drivers: s.drivers,
-      locations: s.locations,
-      billings: s.billings,
-      pods: s.pods,
-      incidents: s.incidents,
-      products: s.products,
-    }
-    for (const table of ENTITY_TABLES) {
-      await client.query(`DELETE FROM ${table}`)
-      for (const item of arrays[table] ?? []) {
-        if (!item || item.id == null) continue
-        await client.query(`INSERT INTO ${table} (id, doc) VALUES ($1, $2)`, [
-          String(item.id),
-          JSON.stringify(item),
-        ])
+    await withWriteLock(async () => {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const arrays = {
+          partners: s.partners,
+          trucks: s.trucks,
+          drivers: s.drivers,
+          locations: s.locations,
+          billings: s.billings,
+          pods: s.pods,
+          incidents: s.incidents,
+          products: s.products,
+        }
+        for (const table of ENTITY_TABLES) {
+          await client.query(`DELETE FROM ${table}`)
+          for (const item of arrays[table] ?? []) {
+            if (!item || item.id == null) continue
+            await client.query(`INSERT INTO ${table} (id, doc) VALUES ($1, $2)`, [
+              String(item.id),
+              JSON.stringify(item),
+            ])
+          }
+        }
+        for (const key of ['settings', 'plan', 'audit']) {
+          await client.query(
+            `INSERT INTO singletons (key, doc) VALUES ($1, $2)
+             ON CONFLICT (key) DO UPDATE SET doc = EXCLUDED.doc`,
+            [key, JSON.stringify(s[key] ?? null)],
+          )
+        }
+        await client.query('COMMIT')
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw e
+      } finally {
+        client.release()
       }
-    }
-    for (const key of ['settings', 'plan', 'audit']) {
-      await client.query(
-        `INSERT INTO singletons (key, doc) VALUES ($1, $2)
-         ON CONFLICT (key) DO UPDATE SET doc = EXCLUDED.doc`,
-        [key, JSON.stringify(s[key] ?? null)],
-      )
-    }
-    await client.query('COMMIT')
+    })
     res.json({ ok: true })
-  } catch (e) {
-    await client.query('ROLLBACK').catch(() => {})
-    res.status(500).json({ error: String(e) })
-  } finally {
-    client.release()
+  } catch {
+    res.status(500).json({ error: 'write failed' })
   }
 })
 
 // Re-seed the database with the canonical sample dataset (used by the app's
 // "Reset to Sample Data"). Returns the fresh state so the client can rehydrate.
-app.post('/api/seed', async (_req, res) => {
+app.post('/api/seed', rateLimit, async (_req, res) => {
   try {
-    await reseed(pool)
+    await withWriteLock(() => reseed(pool))
     res.json({ ok: true })
-  } catch (e) {
-    res.status(500).json({ error: String(e) })
+  } catch {
+    res.status(500).json({ error: 'seed failed' })
   }
 })
 
