@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+@import 'mapbox-gl/dist/mapbox-gl.css';
+
+@theme {
+  --font-sans: 'Inter', 'Noto Sans Thai', ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand */
+  --color-brand-50: #eef5fd;
+  --color-brand-100: #d9e9fa;
+  --color-brand-500: #2a78d6;
+  --color-brand-600: #1f63b8;
+  --color-brand-700: #184f94;
+
+  /* Validated categorical series (route colors) */
+  --color-series-1: #2a78d6;
+  --color-series-2: #1baf7a;
+  --color-series-3: #eda100;
+  --color-series-4: #008300;
+  --color-series-5: #4a3aa7;
+  --color-series-6: #e34948;
+  --color-series-7: #e87ba4;
+  --color-series-8: #eb6834;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-100 text-slate-800 antialiased;
+}
+
+/* Mapbox popup matches app typography */
+.mapboxgl-popup-content {
+  @apply font-sans rounded-lg shadow-lg px-3 py-2 text-sm;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark mode — a global remap of the app's disciplined slate palette.  */
+/* The always-dark sidebar keeps working because dark text greys stay   */
+/* light and it never uses the light background utilities we override.  */
+/* ------------------------------------------------------------------ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-theme='dark'] body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
+/* Surfaces */
+:root[data-theme='dark'] .bg-white {
+  background-color: #172033;
+}
+:root[data-theme='dark'] .bg-slate-50 {
+  background-color: #1e293b;
+}
+:root[data-theme='dark'] .bg-slate-100 {
+  background-color: #243244;
+}
+:root[data-theme='dark'] .bg-slate-200 {
+  background-color: #334155;
+}
+:root[data-theme='dark'] .bg-slate-800 {
+  background-color: #475569;
+}
+
+/* Text — dark greys become light greys (safe on the dark sidebar too) */
+:root[data-theme='dark'] .text-slate-900 {
+  color: #f8fafc;
+}
+:root[data-theme='dark'] .text-slate-800 {
+  color: #e2e8f0;
+}
+:root[data-theme='dark'] .text-slate-700 {
+  color: #cbd5e1;
+}
+:root[data-theme='dark'] .text-slate-600 {
+  color: #a9b6c8;
+}
+:root[data-theme='dark'] .text-slate-500 {
+  color: #94a3b8;
+}
+:root[data-theme='dark'] .text-slate-400 {
+  color: #7c8aa0;
+}
+
+/* Borders & dividers */
+:root[data-theme='dark'] .border-slate-100,
+:root[data-theme='dark'] .border-slate-200,
+:root[data-theme='dark'] .border-slate-300 {
+  border-color: #2c3a4f;
+}
+:root[data-theme='dark'] .divide-slate-100 > * + * {
+  border-color: #2c3a4f;
+}
+
+/* Light-tint status backgrounds → translucent dark tints */
+:root[data-theme='dark'] .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.16);
+}
+:root[data-theme='dark'] .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.16);
+}
+:root[data-theme='dark'] .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.16);
+}
+:root[data-theme='dark'] .bg-brand-50 {
+  background-color: rgba(42, 120, 214, 0.18);
+}
+:root[data-theme='dark'] .text-red-700,
+:root[data-theme='dark'] .text-red-800 {
+  color: #fca5a5;
+}
+:root[data-theme='dark'] .text-amber-700,
+:root[data-theme='dark'] .text-amber-800,
+:root[data-theme='dark'] .text-amber-900 {
+  color: #fcd34d;
+}
+:root[data-theme='dark'] .text-emerald-700,
+:root[data-theme='dark'] .text-emerald-800,
+:root[data-theme='dark'] .text-emerald-900 {
+  color: #6ee7b7;
+}
+:root[data-theme='dark'] .text-brand-700 {
+  color: #93c5fd;
+}
+:root[data-theme='dark'] .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+:root[data-theme='dark'] .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+:root[data-theme='dark'] .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+:root[data-theme='dark'] .border-brand-100 {
+  border-color: rgba(42, 120, 214, 0.4);
+}
+
+/* Inputs & selects */
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] textarea {
+  background-color: #0f1a2b;
+  border-color: #2c3a4f;
+  color: #e2e8f0;
+}
+:root[data-theme='dark'] input::placeholder {
+  color: #64748b;
+}
