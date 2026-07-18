@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Route, Scale,
-  Spline, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, UserRound,
+  CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Scale,
+  Spline, Sun, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, UserRound,
 } from 'lucide-react'
 import type { OptimizeObjective } from '../types'
 import { effectiveMapboxToken, useTms } from '../store'
@@ -76,9 +76,11 @@ export default function Planner() {
     (rs: PlannedRoute[]) =>
       rs.map((r) => {
         const truck = truckById.get(r.truckId)
-        return truck ? { ...r, cost: Math.round(dailyRouteCost(r, truck, partnerById.get(truck.partnerId)) * 100) / 100 } : r
+        if (!truck) return r
+        const withShift = { ...r, shift: settings.shift }
+        return { ...withShift, cost: Math.round(dailyRouteCost(withShift, truck, partnerById.get(truck.partnerId)) * 100) / 100 }
       }),
-    [truckById, partnerById],
+    [truckById, partnerById, settings.shift],
   )
 
   // Scheduled demand per weekday (for the multi-day overview).
@@ -175,9 +177,10 @@ export default function Planner() {
       avgSpeedKmh: settings.avgSpeedKmh,
       lockedRoutes,
       dayOfWeek: planDay ?? undefined,
-      planStartTime: settings.planStartTime,
+      planStartTime: settings.shift === 'night' ? '20:00' : settings.planStartTime,
       objective: settings.optimizeObjective,
       distanceMatrix,
+      shift: settings.shift,
     }
     const raw = milkrun ? planMilkrun(args) : planRoutes(args)
     const result = { ...raw, routes: priceRoutes(raw.routes) }
@@ -416,6 +419,28 @@ export default function Planner() {
                 ))}
               </div>
               <p className="text-[11px] text-slate-400 mt-2">{t(`planner.objHint.${settings.optimizeObjective}`)}</p>
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-2">
+                  {settings.shift === 'night' ? <Moon size={15} className="text-slate-400" /> : <Sun size={15} className="text-slate-400" />}
+                  {t('planner.shift')}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['day', 'night'] as const).map((sh) => (
+                    <button
+                      key={sh}
+                      onClick={() => updateSettings({ shift: sh, planStartTime: sh === 'night' ? '20:00' : '08:00' })}
+                      className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer border transition ${
+                        settings.shift === sh
+                          ? 'bg-brand-500 text-white border-brand-500'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {sh === 'night' ? <Moon size={14} /> : <Sun size={14} />}
+                      {t(`planner.shifts.${sh}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 

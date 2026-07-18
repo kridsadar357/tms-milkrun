@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FileSpreadsheet, Info } from 'lucide-react'
 import { useTms } from '../store'
 import { exportToExcel } from '../lib/excel'
-import { routeCostBreakdown } from '../lib/cost'
+import { planCostByPartner, routeCostBreakdown } from '../lib/cost'
 import { Badge, Button, Card, PageHeader, Table } from '../components/ui'
 
 type Tab = 'route' | 'truck' | 'partner'
@@ -83,6 +83,13 @@ export default function Costs() {
     { id: 'truck', label: t('costs.byTruck') },
     { id: 'route', label: t('costs.byRoute') },
   ]
+
+  // Price the whole plan under every transporter's rate card (cheapest first).
+  const comparison = useMemo(
+    () => (plan ? planCostByPartner(plan.routes, truckById, partners) : []),
+    [plan, truckById, partners],
+  )
+  const cheapest = comparison[0]?.total ?? 0
 
   return (
     <div>
@@ -175,6 +182,32 @@ export default function Costs() {
               <Badge tone="slate">×22</Badge>
             </Card>
           </div>
+
+          {comparison.length > 1 && (
+            <Card className="mt-4">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h2 className="text-sm font-semibold text-slate-800">{t('costs.compareTitle')}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{t('costs.compareHint')}</p>
+              </div>
+              <Table headers={[t('costs.partner'), `${t('costs.dailyTotal')} (${t('common.baht')})`, `${t('costs.monthlyEstimate')} (${t('common.baht')})`, t('costs.vsCheapest')]}>
+                {comparison.map((c, i) => (
+                  <tr key={c.partner.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {c.partner.name}
+                      {i === 0 && <Badge tone="green">{t('costs.best')}</Badge>}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{fmt(c.total)}</td>
+                    <td className="px-4 py-3 text-slate-500">{fmt(c.total * 22)}</td>
+                    <td className="px-4 py-3">
+                      {i === 0 ? <span className="text-emerald-600">—</span> : (
+                        <span className="text-rose-600">+{fmt(c.total - cheapest)} (+{((c.total / cheapest - 1) * 100).toFixed(1)}%)</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            </Card>
+          )}
         </>
       )}
     </div>

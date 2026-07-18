@@ -28,6 +28,11 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
   Each supplier has a **rounds/day cadence** and each transporter a **detailed rate
   card** (labor + OT, fuel, km-allowance, drop-points, daily fixed, admin %); the
   Planner prices routes as **daily cost = rounds × trip + fixed, ×(1+admin)**.
+- **Day / night shift** — plan either shift; it sets the departure time, the pickup
+  window used (night windows may cross midnight), and the labor/fuel rates.
+- **Transporter comparison & report** — Cost Summary re-prices the plan under every
+  transporter's rate card (ranked cheapest-first), and **Export Excel** produces a
+  multi-sheet simulation report (summary, routes, cost, comparison, master data).
 - **Aisin demo dataset** — the sample seed is a real Aisin inbound-milkrun network:
   7 plants, 15 supplier lanes (m³/kg, pickup windows, 1–3 rounds/day), a Yusen
   6W/10W fleet, and five transporter rate cards. Auto Route reproduces an

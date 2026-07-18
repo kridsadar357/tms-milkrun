@@ -13,6 +13,7 @@ Version 1.0 · Bilingual (English / ไทย)
 ## Table of Contents
 
 1. [Overview](#1-overview)
+   · [Milkrun workflow](#1a-milkrun-workflow-end-to-end)
 2. [Installation & Setup](#2-installation--setup)
 3. [Navigating the App](#3-navigating-the-app)
 4. [Master Data](#4-master-data)
@@ -40,23 +41,56 @@ supplier, plant, warehouse, and customer locations.
 
 **Key capabilities**
 
-- **Auto Route** — capacity-constrained optimizer (m³ **and** kg), multiple
-  rounds per truck per day, snapped to real roads via Mapbox.
-- **Interactive editing** — drag to reorder stops, reassign a stop to another
-  truck, lock a route, and run “what-if” fleet scenarios with before/after
-  savings.
-- **Operations** — trip status workflow, proof of delivery (photo/signature),
-  ETA vs. actual delay tracking, printable driver route sheets.
-- **Finance** — partner rate cards, Thai VAT 7% / withholding tax 1%, invoices,
-  monthly statements, and a dispatch manifest.
-- **Bilingual** — full Thai and English UI, Buddhist-era dates on documents.
-- **Light & dark themes**, **role-based access** (admin/dispatcher/viewer), a
-  persisted **activity log**, and **CSV import**.
-- **Real database** — all data is stored in Neon Postgres via a small API
-  server.
+- **Auto Route** — a VRPTW optimizer (nearest-neighbour + 2-opt + iterated local
+  search) honouring **m³ and kg** capacity and **time windows**, optimizing for
+  **lowest cost / shortest distance / balanced load**, planning on **real Mapbox
+  road distances *and* drive times**.
+- **Multi-depot milkrun** — each supplier delivers to a **destination plant**; the
+  optimizer builds a loop that starts and ends at that plant, so a truck only
+  carries goods bound for one plant. Each supplier has a **rounds/day cadence**.
+- **Day / night shift** — plan either shift; the shift sets the departure time,
+  the pickup windows used, and the labor/fuel rates.
+- **Rate-card costing** — each transporter has a detailed **rate card** (labor +
+  OT, fuel, km-allowance, drop-points, daily fixed, admin %); the plan is priced
+  as a real daily cost, with a **transporter comparison** (who is cheapest).
+- **Interactive editing** — drag to reorder stops, reassign a stop, lock a route,
+  and run “what-if” fleet scenarios with before/after savings.
+- **Operations** — trip status workflow, proof of delivery, delay tracking,
+  printable driver route sheets.
+- **Finance** — Thai VAT 7% / withholding tax 1%, invoices, statements, manifest,
+  and an **Excel simulation report**.
+- **Bilingual** (TH/EN), **light & dark themes**, **role-based access**
+  (admin/dispatcher/viewer), an **activity log**, and **CSV import**.
+- **Real database** — Neon Postgres via a small API server.
 
-The sample dataset models an EEC (Chonburi/Rayong) network with an AISIN depot
-at Amata City Chonburi.
+The sample dataset is a real **AISIN inbound-milkrun network**: 7 plants, 15
+supplier lanes (m³/kg, pickup windows, 1–3 rounds/day), a Yusen 6W/10W fleet, and
+five transporter rate cards. Running Auto Route reproduces an 8-route milkrun at
+roughly ฿33k/day.
+
+---
+
+## 1a. Milkrun workflow (end to end)
+
+1. **Master data** — add **plants** (Delivery Locations with type *Plant*) and
+   **suppliers** (type *Supplier*); on each supplier set its **Delivery plant**,
+   **Pickups per day**, demand (m³/kg), and pickup window. Add **Trucks** (6W/10W
+   with m³ + kg capacity) tied to a **Transport Partner**, and give each partner a
+   **Milkrun rate card** per truck type.
+2. **Choose the run** — in **Route Planner** pick **Optimize for** (Lowest cost is
+   the default), the **Shift** (Day/Night), and optionally a **weekday** and a
+   **what-if** fleet (exclude trucks).
+3. **Auto Route** — the optimizer groups suppliers by plant, fetches the real
+   Mapbox road matrix, builds and improves each plant loop, and prices every route
+   with the partner’s rate card. The plan-total card shows daily cost, distance,
+   and CO₂.
+4. **Review & adjust** — inspect each route card (utilization, ×N rounds/day, cost,
+   in-window/late badges); drag to reorder or reassign stops, or lock a route and
+   re-run.
+5. **Cost & compare** — open **Cost Summary** for the fixed/variable breakdown and
+   the **transporter comparison**; export the **Excel simulation report**.
+6. **Operate** — dispatch routes, record proof of delivery, then bill from the plan
+   in **Billing & Payments**.
 
 ---
 
@@ -137,9 +171,15 @@ Each location has:
 | Zone | Region grouping (e.g. Chonburi, Rayong) — filterable |
 | Latitude / Longitude | **Validated** coordinates |
 | Demand (m³/day), (kg/day) | Volume and weight to move |
-| Service Time (min) | Handling time at the stop |
+| Service Time (min) | Handling time / loading time at the stop |
 | Delivery Window | Earliest / latest time (HH:MM) |
+| **Delivery plant** (suppliers) | The **Plant** location this supplier delivers to — turns on **milkrun mode**: Auto Route loops the truck back to this plant. Leave as *Global depot* for single-depot planning. |
+| **Pickups per day** (suppliers) | How often this supplier is collected (1–3). The milkrun loop runs at the cadence of its most-frequent supplier. |
 | Delivery Days | Which weekdays the stop is served (empty = every day) — drives multi-day planning |
+
+> **Milkrun tip:** create your plants first (type *Plant*), then set each
+> supplier’s **Delivery plant**. As soon as one supplier has a plant, Auto Route
+> switches to multi-depot milkrun and groups suppliers by plant.
 
 **Coordinate validation:** latitude must be −90…90 and longitude −180…180.
 Coordinates outside Thailand raise a soft warning so you can double-check. Tip:
@@ -173,6 +213,15 @@ Contact details plus a **Rate Card & Terms** section:
 - **Min. Charge** — invoice floor
 - **Credit (days)** — payment terms, used for invoice due dates
 
+**Milkrun rate card (per truck type)** — the detailed cost used to price milkrun
+routes. For each truck type (e.g. 6W, 10W) enter: labor ฿/hr, OT ฿/hr, ฿/drop,
+฿/km allowance, trip fee, fuel km/L, diesel ฿/L, other ฿/day, and admin %. Night
+rates can differ (better fuel economy off-peak). A route’s daily cost is
+**(rounds × trip + other) × (1 + admin)**, where trip = labor (+OT past 8h) + fuel
++ allowance + drop-points + trip fee. Leave a type blank to fall back to the
+simple Rate/km above. Because every partner can have its own card, the Cost
+Summary can show **which transporter is cheapest for the same plan**.
+
 and **Bank Details** (bank, account number, account name) used by the **Bank
 Payment File** export ([§9](#9-billing--payments)).
 
@@ -191,11 +240,19 @@ the right.
 
 ### 5.1 Auto Route
 
-Pick **Optimize for** first — **Lowest cost (฿)** (the default: cheapest total
-delivery cost, so the cheaper cost/km truck takes the longer route and fewer
-trucks are used when that saves money), **Shortest distance** (fewest total km),
-or **Balanced load** (keeps cost low while spreading load evenly). The choice is
-saved. Then click **Auto Route**. The optimizer:
+Set two controls first (both are saved):
+
+- **Optimize for** — **Lowest cost (฿)** (the default: cheapest total delivery
+  cost, so the cheaper cost/km truck takes the longer route and fewer trucks are
+  used when that saves money), **Shortest distance** (fewest total km), or
+  **Balanced load** (keeps cost low while spreading load evenly).
+- **Shift** — **Day** (departs 08:00, uses each stop’s day pickup window and day
+  rates) or **Night** (departs 20:00, uses the night window — windows crossing
+  midnight like 20:00–05:00 are handled — and the transporter’s night rates).
+
+In **milkrun mode** (any supplier has a Delivery plant) Auto Route groups
+suppliers by plant and builds a loop per plant. Then click **Auto Route**. The
+optimizer:
 
 1. builds one trip per truck round with a **time-window + capacity
    nearest-neighbour** pass, respecting **both m³ and kg** and filling **rounds
@@ -268,10 +325,13 @@ service — set in Delivery Locations; empty = every day). In the Planner, the
 - see a **Weekly demand** overview (stops and m³ per weekday) to balance the
   week at a glance.
 
-### 5.5 Export
+### 5.6 Export — simulation report
 
-- **Export Excel** — the full plan (routes, stops, costs, master data) as a
-  styled multi-sheet workbook.
+**Export Excel** (on the Planner and Cost Summary) produces a styled multi-sheet
+**simulation report**: a Summary of KPIs, the **Routes** (stop-by-stop), a **Cost**
+sheet (per route with destination plant, rounds/day, fixed vs variable, total),
+the **Transporter comparison**, and the master data. Use it to share the plan or
+to compare scenarios offline.
 
 ---
 
@@ -308,8 +368,17 @@ CSV.
 ## 8. Cost Summary
 
 A pivot of the current plan’s cost, grouped **By Partner / By Truck / By Route**.
-Shows fixed vs. variable cost, THB per m³, the **daily total**, and a **×22-day
-monthly estimate**. Export to Excel.
+Costs use each transporter’s **rate card** when set, so the **Fixed** column is
+labor + trip fee + daily other and **Variable** is fuel + km-allowance +
+drop-points (both include admin); otherwise it falls back to the truck’s simple
+fixed + per-km cost. It also shows THB per m³, the **daily total**, and a
+**×22-day monthly estimate**.
+
+**Transporter comparison** — below the pivot, the same plan is re-priced under
+**every** transporter’s rate card and ranked cheapest-first, with each one’s
+daily and monthly cost and its gap versus the cheapest (e.g. *Yusen +1.7%*,
+*Karitsu +37%*). This answers “who should we award this milkrun to?” at a glance.
+Everything exports to the Excel simulation report.
 
 ## 8a. Milkrun Analytics
 

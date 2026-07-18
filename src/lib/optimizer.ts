@@ -58,6 +58,8 @@ export interface PlanInput {
   objective?: OptimizeObjective
   /** Real Mapbox road-distance matrix; when set, all decisions use real road km. */
   distanceMatrix?: DistanceMatrix
+  /** Shift to plan: 'night' uses each stop's night pickup window. Default 'day'. */
+  shift?: 'day' | 'night'
 }
 
 /** A location is served on a day if it has no schedule, or lists that weekday. */
@@ -77,8 +79,20 @@ const minToHm = (min: number) => {
   const m = ((min % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.round(m % 60)).padStart(2, '0')}`
 }
-const winStart = (l: DeliveryLocation) => (l.windowStart ? hmToMin(l.windowStart) : null)
-const winEnd = (l: DeliveryLocation) => (l.windowEnd ? hmToMin(l.windowEnd) : null)
+// Which shift the current planRoutes run uses — picks the night window when set.
+let planShift: 'day' | 'night' = 'day'
+const winStart = (l: DeliveryLocation) => {
+  const s = planShift === 'night' ? (l.windowStartNight ?? l.windowStart) : l.windowStart
+  return s ? hmToMin(s) : null
+}
+const winEnd = (l: DeliveryLocation) => {
+  const e = planShift === 'night' ? (l.windowEndNight ?? l.windowEnd) : l.windowEnd
+  if (!e) return null
+  const s = winStart(l)
+  let end = hmToMin(e)
+  if (s != null && end < s) end += 1440 // window crosses midnight (e.g. 20:00–05:00)
+  return end
+}
 /** Real Mapbox travel time (min) when available, else road distance ÷ speed. */
 const travelMin = (a: LatLng, b: LatLng, speed: number) => {
   const m = matrixDur ? matrixDur(a, b) : null
@@ -111,7 +125,9 @@ export function planRoutes({
   planStartTime = '08:00',
   objective = 'cost',
   distanceMatrix,
+  shift = 'day',
 }: PlanInput): PlanResult {
+  planShift = shift
   // Route every distance/time query through the real Mapbox matrix when provided.
   if (distanceMatrix) {
     const idx = new Map(distanceMatrix.points.map((p, i) => [ptKey(p), i]))
@@ -139,6 +155,7 @@ export function planRoutes({
   } finally {
     matrixDist = null
     matrixDur = null
+    planShift = 'day'
   }
 }
 

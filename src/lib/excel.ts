@@ -3,6 +3,7 @@
 import ExcelJS from 'exceljs'
 import i18n from '../i18n'
 import { billingAmounts } from '../store'
+import { planCostByPartner, routeCostBreakdown } from './cost'
 import type {
   BillingRecord, DeliveryLocation, PlanResult, TransportPartner, Truck,
 } from '../types'
@@ -135,52 +136,73 @@ export async function exportToExcel(data: ExportData) {
   /* ---- Cost summary (route level, with partner/truck columns) ---- */
   if (plan && plan.routes.length > 0) {
     const ws = wb.addWorksheet(t('costs.title'))
+    const plantName = (r: PlanResult['routes'][number]) => {
+      const first = locById.get(r.stops[0]?.locationId)
+      return first?.deliveryPlantId ? (locById.get(first.deliveryPlantId)?.code ?? '') : ''
+    }
     const rows = plan.routes.map((r) => {
       const truck = truckById.get(r.truckId)
       const partner = truck ? partnerById.get(truck.partnerId) : undefined
-      const fixed = truck?.fixedCostPerRound ?? 0
+      const bd = truck ? routeCostBreakdown(r, truck, partner) : { fixed: 0, variable: r.cost, total: r.cost }
       return [
         truck?.plateNumber ?? r.truckId,
-        r.round,
+        plantName(r),
+        r.roundsPerDay ?? 1,
         partner?.name ?? '—',
         r.stops.length,
         r.distanceKm,
         r.durationMinutes,
         r.totalM3,
         r.totalKg,
-        fixed,
-        r.cost - fixed,
-        r.cost,
+        bd.fixed,
+        bd.variable,
+        bd.total,
       ]
     })
     addTable(
       ws,
       [
         { label: t('costs.truck'), width: 16 },
-        { label: t('planner.round'), width: 8 },
-        { label: t('costs.partner'), width: 26 },
+        { label: t('locations.deliveryPlant'), width: 12 },
+        { label: t('planner.roundsPerDayShort'), width: 8, numFmt: INT },
+        { label: t('costs.partner'), width: 24 },
         { label: t('planner.stops'), width: 8 },
-        { label: `${t('planner.distance')} (${t('common.km')})`, width: 14, numFmt: DEC },
-        { label: `${t('planner.duration')} (${t('common.min')})`, width: 14, numFmt: INT },
+        { label: `${t('planner.distance')} (${t('common.km')})`, width: 13, numFmt: DEC },
+        { label: `${t('planner.duration')} (${t('common.min')})`, width: 13, numFmt: INT },
         { label: t('common.m3'), width: 10, numFmt: DEC },
         { label: t('common.kg'), width: 12, numFmt: INT },
-        { label: `${t('costs.fixed')} (${t('common.baht')})`, width: 16, numFmt: INT },
-        { label: `${t('costs.variable')} (${t('common.baht')})`, width: 16, numFmt: DEC },
+        { label: `${t('costs.fixed')} (${t('common.baht')})`, width: 15, numFmt: INT },
+        { label: `${t('costs.variable')} (${t('common.baht')})`, width: 15, numFmt: DEC },
         { label: `${t('costs.totalCost')} (${t('common.baht')})`, width: 16, numFmt: DEC },
       ],
       rows,
     )
-    boldTotalRow(ws, [
-      t('common.total'), null, null,
-      rows.reduce((s, r) => s + (r[3] as number), 0),
-      rows.reduce((s, r) => s + (r[4] as number), 0),
-      rows.reduce((s, r) => s + (r[5] as number), 0),
-      rows.reduce((s, r) => s + (r[6] as number), 0),
-      rows.reduce((s, r) => s + (r[7] as number), 0),
-      rows.reduce((s, r) => s + (r[8] as number), 0),
-      rows.reduce((s, r) => s + (r[9] as number), 0),
-      rows.reduce((s, r) => s + (r[10] as number), 0),
-    ])
+    const sum = (i: number) => rows.reduce((s, r) => s + (r[i] as number), 0)
+    boldTotalRow(ws, [t('common.total'), null, null, null, sum(4), sum(5), sum(6), sum(7), sum(8), sum(9), sum(10), sum(11)])
+  }
+
+  /* ---- Transporter comparison (plan priced under each rate card) ---- */
+  const comparison = plan ? planCostByPartner(plan.routes, truckById, partners) : []
+  if (comparison.length > 1) {
+    const ws = wb.addWorksheet(t('costs.compareTitle'))
+    const cheapest = comparison[0].total
+    addTable(
+      ws,
+      [
+        { label: t('costs.partner'), width: 28 },
+        { label: `${t('costs.dailyTotal')} (${t('common.baht')})`, width: 18, numFmt: DEC },
+        { label: `${t('costs.monthlyEstimate')} (${t('common.baht')})`, width: 22, numFmt: INT },
+        { label: `${t('costs.vsCheapest')} (${t('common.baht')})`, width: 16, numFmt: DEC },
+        { label: '%', width: 10, numFmt: DEC },
+      ],
+      comparison.map((c, i) => [
+        c.partner.name + (i === 0 ? ` — ${t('costs.best')}` : ''),
+        c.total,
+        c.total * 22,
+        i === 0 ? 0 : c.total - cheapest,
+        i === 0 ? 0 : Math.round((c.total / cheapest - 1) * 1000) / 10,
+      ]),
+    )
   }
 
   /* ---- Master data ---- */

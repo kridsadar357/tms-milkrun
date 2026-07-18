@@ -15,7 +15,13 @@ export interface RateCard {
   fuelRatePerL: number // diesel THB/litre
   otherPerDay: number // fixed other cost THB/day
   adminPct: number // admin overhead as a fraction (0.08 = 8%)
+  // Night-shift overrides (fall back to the day values when unset)
+  nightLaborPerHr?: number
+  nightOtPerHr?: number
+  nightFuelKmPerL?: number
 }
+
+export type Shift = 'day' | 'night'
 
 export interface TransportPartner {
   id: string
@@ -90,6 +96,8 @@ export interface DeliveryLocation {
   serviceMinutes: number // handling time at the stop
   windowStart: string // earliest delivery 'HH:MM' ('' = none)
   windowEnd: string // latest delivery 'HH:MM' ('' = none)
+  windowStartNight?: string // night-shift pickup window (falls back to the day window)
+  windowEndNight?: string
   deliveryDays: number[] // weekdays served, 0=Sun..6=Sat ([] = every day)
   active: boolean
   roundsPerDay?: number // milkrun pickup frequency (default 1); loop runs this often
@@ -121,6 +129,7 @@ export interface PlannedRoute {
   cost: number
   colorIndex: number // categorical palette slot
   roundsPerDay?: number // milkrun: times this loop runs per day (default 1)
+  shift?: Shift // which shift this loop was planned/priced for (default 'day')
   status?: TripStatus // execution status (defaults to 'planned')
   startTime?: string // planned departure clock 'HH:MM' (defaults to 08:00)
   locked?: boolean // excluded from Auto Route re-optimization
@@ -228,6 +237,7 @@ export interface Settings {
   depotLng: number
   avgSpeedKmh: number
   planStartTime: string // planned depot departure clock 'HH:MM' (default 08:00)
+  shift: Shift // day or night shift — sets departure time, windows, and rates
   optimizeObjective: OptimizeObjective // what Auto Route minimizes (default 'cost')
   useRoadGeometry: boolean
   // Fuel & emissions

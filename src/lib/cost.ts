@@ -1,19 +1,55 @@
 /** Milkrun trip pricing — detailed transporter rate card, with a simple fallback. */
 
-import type { PlannedRoute, TransportPartner, Truck } from '../types'
+import type { PlannedRoute, RateCard, Shift, TransportPartner, Truck } from '../types'
+
+/** Effective labor / OT / fuel-economy for the given shift (night falls back to day). */
+function shiftRates(card: RateCard, shift: Shift) {
+  return shift === 'night'
+    ? {
+        laborPerHr: card.nightLaborPerHr ?? card.laborPerHr,
+        otPerHr: card.nightOtPerHr ?? card.otPerHr,
+        fuelKmPerL: card.nightFuelKmPerL ?? card.fuelKmPerL,
+      }
+    : { laborPerHr: card.laborPerHr, otPerHr: card.otPerHr, fuelKmPerL: card.fuelKmPerL }
+}
+
+const routeShift = (route: PlannedRoute): Shift => route.shift ?? 'day'
+
+/**
+ * Price a whole plan under each transporter that has a rate card, keeping each
+ * route on its own truck type — a like-for-like "who is cheapest" comparison.
+ * Returns rows sorted cheapest-first (partners with no rate card are skipped).
+ */
+export function planCostByPartner(
+  routes: PlannedRoute[],
+  truckById: Map<string, Truck>,
+  partners: TransportPartner[],
+): { partner: TransportPartner; total: number }[] {
+  return partners
+    .filter((p) => p.costProfile && Object.keys(p.costProfile).length > 0)
+    .map((partner) => ({
+      partner,
+      total: routes.reduce((sum, r) => {
+        const truck = truckById.get(r.truckId)
+        return truck ? sum + dailyRouteCost(r, truck, partner) : sum
+      }, 0),
+    }))
+    .sort((a, b) => a.total - b.total)
+}
 
 /**
  * Cost of ONE trip of a route using the partner's rate card for the truck type:
  * labor (+ overtime past 8h) + fuel + km-allowance + drop points + trip/safety.
- * Excludes the per-day fixed cost and admin, which are applied once per day in
- * dailyRouteCost. Returns null if the partner has no rate card for the type.
+ * Excludes the per-day fixed cost and admin, applied once/day in dailyRouteCost.
+ * Returns null if the partner has no rate card for the type.
  */
 export function tripCost(route: PlannedRoute, truck: Truck, partner: TransportPartner | undefined): number | null {
   const card = partner?.costProfile?.[truck.type]
   if (!card) return null
+  const r = shiftRates(card, routeShift(route))
   const hours = route.durationMinutes / 60
-  const labor = Math.min(hours, 8) * card.laborPerHr + Math.max(0, hours - 8) * card.otPerHr
-  const fuel = card.fuelKmPerL > 0 ? (route.distanceKm / card.fuelKmPerL) * card.fuelRatePerL : 0
+  const labor = Math.min(hours, 8) * r.laborPerHr + Math.max(0, hours - 8) * r.otPerHr
+  const fuel = r.fuelKmPerL > 0 ? (route.distanceKm / r.fuelKmPerL) * card.fuelRatePerL : 0
   const allowance = route.distanceKm * card.allowancePerKm
   const drops = route.stops.length * card.dropCost
   return labor + fuel + allowance + drops + card.tripSafety
@@ -54,9 +90,10 @@ export function routeCostBreakdown(
     const variable = rounds * truck.costPerKm * route.distanceKm
     return { fixed, variable, total: fixed + variable }
   }
+  const r = shiftRates(card, routeShift(route))
   const hours = route.durationMinutes / 60
-  const labor = Math.min(hours, 8) * card.laborPerHr + Math.max(0, hours - 8) * card.otPerHr
-  const fuel = card.fuelKmPerL > 0 ? (route.distanceKm / card.fuelKmPerL) * card.fuelRatePerL : 0
+  const labor = Math.min(hours, 8) * r.laborPerHr + Math.max(0, hours - 8) * r.otPerHr
+  const fuel = r.fuelKmPerL > 0 ? (route.distanceKm / r.fuelKmPerL) * card.fuelRatePerL : 0
   const variableTrip = fuel + route.distanceKm * card.allowancePerKm + route.stops.length * card.dropCost
   const fixedTrip = labor + card.tripSafety
   const m = 1 + card.adminPct

@@ -156,6 +156,8 @@ const en = {
     planDay: 'Plan day',
     weekOverview: 'Weekly demand',
     optimizeFor: 'Optimize for',
+    shift: 'Shift',
+    shifts: { day: 'Day shift', night: 'Night shift' },
     obj: { cost: 'Lowest cost', distance: 'Shortest dist.', balanced: 'Balanced load' },
     objHint: {
       cost: 'Picks the cheapest overall delivery cost (฿) — the cheaper cost/km truck takes the longer route, fewer trucks when that saves money.',
@@ -169,6 +171,7 @@ const en = {
     routesCount: 'Routes',
     unassignedN: '{{n}} stop(s) unassigned',
     roundsPerDay: '×{{n}} rounds/day',
+    roundsPerDayShort: 'Rnd/day',
   },
   locations: {
     title: 'Delivery Locations',
@@ -269,6 +272,10 @@ const en = {
     costPerKg: 'THB / kg',
     dailyTotal: 'Daily Total',
     monthlyEstimate: 'Monthly Estimate (×22 days)',
+    compareTitle: 'Transporter comparison',
+    compareHint: 'This plan priced under each transporter’s rate card',
+    vsCheapest: 'vs cheapest',
+    best: 'Cheapest',
     noPlan: 'Run Auto Route in the Planner to see cost breakdowns.',
   },
   analytics: {
@@ -684,6 +691,8 @@ const th: typeof en = {
     planDay: 'วางแผนวัน',
     weekOverview: 'ความต้องการรายสัปดาห์',
     optimizeFor: 'เป้าหมายการจัดเส้นทาง',
+    shift: 'กะ',
+    shifts: { day: 'กะกลางวัน', night: 'กะกลางคืน' },
     obj: { cost: 'ต้นทุนต่ำสุด', distance: 'ระยะสั้นสุด', balanced: 'เกลี่ยภาระ' },
     objHint: {
       cost: 'เลือกต้นทุนส่งรวมถูกที่สุด (฿) — รถที่ค่า/กม.ถูกกว่าจะวิ่งเส้นที่ไกลกว่า และใช้รถน้อยลงเมื่อประหยัดกว่า',
@@ -697,6 +706,7 @@ const th: typeof en = {
     routesCount: 'เส้นทาง',
     unassignedN: 'ยังไม่ได้จัดรถ {{n}} จุด',
     roundsPerDay: '×{{n}} รอบ/วัน',
+    roundsPerDayShort: 'รอบ/วัน',
   },
   locations: {
     title: 'จุดส่งสินค้า',
@@ -797,6 +807,10 @@ const th: typeof en = {
     costPerKg: 'บาท / กก.',
     dailyTotal: 'รวมต่อวัน',
     monthlyEstimate: 'ประมาณการต่อเดือน (×22 วัน)',
+    compareTitle: 'เปรียบเทียบผู้ขนส่ง',
+    compareHint: 'คิดราคาแผนนี้ตาม rate card ของผู้ขนส่งแต่ละเจ้า',
+    vsCheapest: 'เทียบเจ้าถูกสุด',
+    best: 'ถูกสุด',
     noPlan: 'กด “จัดเส้นทางอัตโนมัติ” ในหน้าวางแผนเส้นทางเพื่อดูสรุปต้นทุน',
   },
   analytics: {
