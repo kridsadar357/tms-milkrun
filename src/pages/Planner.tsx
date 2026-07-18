@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Save, Scale,
+  CalendarDays, Check, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Save, Scale,
   Spline, Sun, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, Undo2, UserRound,
 } from 'lucide-react'
 import type { OptimizeObjective } from '../types'
@@ -32,10 +32,10 @@ const NEXT_ACTION: Partial<Record<TripStatus, [TripStatus, string]>> = {
   'in-transit': ['completed', 'planner.complete'],
 }
 
-export default function Planner() {
+export default function Planner({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, i18n } = useTranslation()
   const { trucks, locations, partners, drivers, plan, settings, setPlan, updateRouteStatus,
-    patchRoute, updatePlanRoutes, updateSettings,
+    patchRoute, updatePlanRoutes, updateSettings, resetToSeed,
     scenarios, saveScenario, deleteScenario, loadScenario } = useTms()
   const [busy, setBusy] = useState<null | 'plan' | 'road'>(null)
   const [progress, setProgress] = useState<{ label: string; done: number; total: number } | null>(null)
@@ -347,11 +347,38 @@ export default function Planner() {
       />
 
       {!canPlan && (
-        <Card className="p-4 mb-4 flex items-center gap-3 text-amber-800 bg-amber-50 border-amber-200">
-          <TriangleAlert size={18} />
-          <span className="text-sm">
-            {activeTrucks.length === 0 ? t('planner.noTrucks') : t('planner.noLocations')}
-          </span>
+        <Card className="p-5 mb-4">
+          <h2 className="text-base font-semibold text-slate-800 mb-1">{t('planner.onboardTitle')}</h2>
+          <p className="text-sm text-slate-500 mb-4">{t('planner.onboardIntro')}</p>
+          <ol className="space-y-2.5">
+            {([
+              { done: activeLocations.length > 0, label: t('planner.onboardLocations'), count: locations.length, page: 'locations', optional: false },
+              { done: activeTrucks.length > 0, label: t('planner.onboardTrucks'), count: activeTrucks.length, page: 'trucks', optional: false },
+              { done: partners.some((p) => p.costProfile), label: t('planner.onboardPartners'), count: partners.length, page: 'partners', optional: true },
+            ] as const).map((step) => (
+              <li key={step.page} className="flex items-center gap-3">
+                <span className={`flex items-center justify-center w-5 h-5 rounded-full text-xs shrink-0 ${step.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                  {step.done ? <Check size={13} /> : ''}
+                </span>
+                <span className="text-sm text-slate-700 flex-1">
+                  {step.label}
+                  {step.optional && <span className="text-slate-400"> · {t('common.all')}</span>}
+                  <span className="text-slate-400 tabular-nums"> ({step.count})</span>
+                </span>
+                {canEditPlan && (
+                  <Button variant="secondary" onClick={() => onNavigate?.(step.page)}>{step.done ? t('common.edit') : t('common.add')}</Button>
+                )}
+              </li>
+            ))}
+          </ol>
+          {canEditPlan && (
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
+              <Button variant="secondary" onClick={() => confirm(t('settings.resetConfirm')) && resetToSeed()}>
+                {t('planner.onboardSample')}
+              </Button>
+              <span className="text-xs text-slate-400">{t('planner.onboardImportNote')}</span>
+            </div>
+          )}
         </Card>
       )}
 
