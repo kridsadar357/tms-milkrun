@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Save, Scale,
-  Spline, Sun, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, UserRound,
+  Spline, Sun, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, Undo2, UserRound,
 } from 'lucide-react'
 import type { OptimizeObjective } from '../types'
 import { effectiveMapboxToken, useTms } from '../store'
@@ -38,6 +38,8 @@ export default function Planner() {
     patchRoute, updatePlanRoutes, updateSettings,
     scenarios, saveScenario, deleteScenario, loadScenario } = useTms()
   const [busy, setBusy] = useState<null | 'plan' | 'road'>(null)
+  const [progress, setProgress] = useState<{ label: string; done: number; total: number } | null>(null)
+  const [editHistory, setEditHistory] = useState<PlannedRoute[][]>([])
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [excludedTrucks, setExcludedTrucks] = useState<Set<string>>(new Set())
   const [savings, setSavings] = useState<Savings | null>(null)
@@ -110,12 +112,15 @@ export default function Planner() {
   const snapPlanToRoads = useCallback(
     async (result: NonNullable<typeof plan>) => {
       setBusy('road')
+      const withStops = result.routes.filter((r) => r.stops.length > 0)
       const upgraded: PlannedRoute[] = []
+      let done = 0
       for (const route of result.routes) {
         const truck = truckById.get(route.truckId)
         const stops = route.stops
           .map((s) => locById.get(s.locationId))
           .filter((l): l is NonNullable<typeof l> => !!l)
+        if (stops.length) setProgress({ label: t('planner.progSnap'), done: done++, total: withStops.length })
         const road = truck ? await fetchRoadRoute(mapToken, depotForRoute(route), stops).catch(() => null) : null
         upgraded.push(
           road && truck
@@ -130,6 +135,7 @@ export default function Planner() {
         )
       }
       setPlan({ ...result, routes: priceRoutes(upgraded) })
+      setProgress(null)
       setBusy(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,6 +161,7 @@ export default function Planner() {
     const prev = plan ? summarize(plan.routes) : null
     setBusy('plan')
     setSelectedRouteId(null)
+    setEditHistory([])
     // Let the spinner paint before the (synchronous) solver runs.
     await new Promise((r) => setTimeout(r, 30))
     // Keep locked routes as-is; exclude any "what-if" trucks from planning.
@@ -174,8 +181,10 @@ export default function Planner() {
       )
       const plants = milkrun ? locations.filter((l) => l.kind === 'plant') : []
       setBusy('road')
+      setProgress({ label: t('planner.progMatrix'), done: 0, total: 0 })
       distanceMatrix = (await fetchDistanceMatrix(mapToken, [depot, ...plants, ...planStops])) ?? undefined
       setBusy('plan')
+      setProgress({ label: t('planner.progOptimize'), done: 0, total: 0 })
       await new Promise((r) => setTimeout(r, 30))
     }
 
@@ -199,6 +208,7 @@ export default function Planner() {
     if (settings.useRoadGeometry && mapToken && result.routes.some((r) => !r.geometry)) {
       await snapPlanToRoads(result)
     } else {
+      setProgress(null)
       setBusy(null)
     }
   }
@@ -237,6 +247,7 @@ export default function Planner() {
   )
 
   const applyEdit = async (nextRoutes: PlannedRoute[]) => {
+    if (plan) setEditHistory((h) => [plan.routes, ...h].slice(0, 15)) // snapshot for Undo
     const cleaned = nextRoutes.filter((r) => r.stops.length > 0)
     updatePlanRoutes(priceRoutes(cleaned))
     if (settings.useRoadGeometry && mapToken && cleaned.some((r) => !r.geometry)) {
@@ -245,6 +256,14 @@ export default function Planner() {
       updatePlanRoutes(priceRoutes(snapped))
       setBusy(null)
     }
+  }
+
+  const undoEdit = () => {
+    if (editHistory.length === 0) return
+    const [prev, ...rest] = editHistory
+    updatePlanRoutes(prev)
+    setEditHistory(rest)
+    setSelectedRouteId(null)
   }
 
   const reorderStop = (routeId: string, from: number, to: number) => {
@@ -303,6 +322,11 @@ export default function Planner() {
                 <FileSpreadsheet size={16} /> {t('common.exportExcel')}
               </Button>
             )}
+            {canEditPlan && editHistory.length > 0 && (
+              <Button variant="secondary" onClick={undoEdit} disabled={busy !== null}>
+                <Undo2 size={16} /> {t('planner.undo')}
+              </Button>
+            )}
             {plan && canEditPlan && (
               <Button variant="secondary" onClick={() => setPlan(null)}>
                 <Trash2 size={16} /> {t('planner.clearPlan')}
@@ -346,6 +370,21 @@ export default function Planner() {
         />
 
         <div className="overflow-y-auto space-y-3 pr-1">
+          {progress && (
+            <Card className="p-3 border-brand-200 bg-brand-50">
+              <div className="flex items-center gap-2 text-sm text-brand-700 font-medium mb-2">
+                <Route size={15} className="animate-pulse" />
+                {progress.label}
+                {progress.total > 0 && <span className="ml-auto tabular-nums text-xs text-brand-500">{progress.done}/{progress.total}</span>}
+              </div>
+              <div className="h-1.5 rounded-full bg-brand-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full bg-brand-500 ${progress.total > 0 ? 'transition-[width] duration-300' : 'animate-pulse w-1/3'}`}
+                  style={progress.total > 0 ? { width: `${Math.round((progress.done / progress.total) * 100)}%` } : undefined}
+                />
+              </div>
+            </Card>
+          )}
           {plan && (
             <p className="text-xs text-slate-400">
               {t('planner.plannedAt')}: {new Date(plan.plannedAt).toLocaleString()}

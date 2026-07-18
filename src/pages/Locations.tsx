@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileDown, FileUp, Pencil, Plus, Trash2 } from 'lucide-react'
-import { newId, useTms } from '../store'
+import { effectiveMapboxToken, newId, useTms } from '../store'
+import CoordPicker from '../components/CoordPicker'
 import { validateCoords } from '../lib/geo'
 import { exportCsv, parseCsv, readFileText } from '../lib/csv'
 import { can } from '../lib/permissions'
@@ -24,6 +25,7 @@ const emptyForm = {
 export default function Locations() {
   const { t, i18n } = useTranslation()
   const { locations, trucks, settings, upsertLocation, deleteLocation, logAudit } = useTms()
+  const mapToken = effectiveMapboxToken(settings)
   const canEdit = can(settings.role, 'master')
   const fileRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -307,6 +309,17 @@ export default function Locations() {
             <Field label={t('locations.lng')} error={errors.coords ? ' ' : undefined} hint={coordWarning ? ' ' : undefined}>
               <input className={inputClass} inputMode="decimal" placeholder="100.9319" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
             </Field>
+            {mapToken && (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-slate-500 mb-1">{t('locations.clickMapHint')}</p>
+                <CoordPicker
+                  token={mapToken}
+                  lat={Number.isFinite(Number(form.lat)) && form.lat !== '' ? Number(form.lat) : null}
+                  lng={Number.isFinite(Number(form.lng)) && form.lng !== '' ? Number(form.lng) : null}
+                  onPick={({ lat, lng }) => setForm({ ...form, lat: String(lat), lng: String(lng) })}
+                />
+              </div>
+            )}
             <Field label={t('locations.demandM3')}>
               <input className={inputClass} type="number" min="0" step="0.1" value={form.demandM3} onChange={(e) => setForm({ ...form, demandM3: e.target.value })} />
             </Field>
