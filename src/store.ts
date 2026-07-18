@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { drainSaves, loadState, reseedDatabase, saveState } from './lib/api'
+import { estimateCo2Kg } from './types'
 import type {
   AuditAction,
   AuditEntry,
@@ -11,6 +12,7 @@ import type {
   PlannedRoute,
   PlanResult,
   PodRecord,
+  Scenario,
   Settings,
   TransportPartner,
   TripStatus,
@@ -110,6 +112,10 @@ export interface TmsState {
   upsertProduct: (p: Product) => void
   deleteProduct: (id: string) => void
   setPlan: (plan: PlanResult | null) => void
+  scenarios: Scenario[]
+  saveScenario: (name: string) => void
+  deleteScenario: (id: string) => void
+  loadScenario: (id: string) => void
   updateRouteStatus: (routeId: string, status: TripStatus) => void
   patchRoute: (routeId: string, patch: Partial<PlannedRoute>) => void
   updatePlanRoutes: (routes: PlannedRoute[], unassignedLocationIds?: string[]) => void
@@ -147,6 +153,7 @@ export const useTms = create<TmsState>()((set, get) => ({
       drivers: seedDrivers,
       locations: seedLocations,
       plan: null as PlanResult | null,
+      scenarios: [] as Scenario[],
       billings: [] as BillingRecord[],
       pods: [] as PodRecord[],
       incidents: [] as Incident[],
@@ -227,6 +234,31 @@ export const useTms = create<TmsState>()((set, get) => ({
       upsertProduct: (p) => set((s) => ({ products: upsert(s.products, p) })),
       deleteProduct: (id) => set((s) => ({ products: s.products.filter((x) => x.id !== id) })),
       setPlan: (plan) => set({ plan }),
+      saveScenario: (name) => {
+        const s = get()
+        if (!s.plan) return
+        const rs = s.plan.routes.filter((r) => r.stops.length > 0)
+        const scenario: Scenario = {
+          id: newId(),
+          name: name.trim() || new Date().toLocaleString(),
+          createdAt: new Date().toISOString(),
+          shift: s.settings.shift,
+          objective: s.settings.optimizeObjective,
+          plan: s.plan,
+          totalCost: Math.round(rs.reduce((n, r) => n + r.cost, 0)),
+          distanceKm: Math.round(rs.reduce((n, r) => n + r.distanceKm, 0) * 10) / 10,
+          trucks: rs.length,
+          co2Kg: Math.round(rs.reduce((n, r) => n + estimateCo2Kg(r.distanceKm, s.settings), 0)),
+          unassigned: s.plan.unassignedLocationIds.length,
+        }
+        set((st) => ({ scenarios: [scenario, ...st.scenarios].slice(0, 20) }))
+        get().logAudit('plan', 'scenario', scenario.name)
+      },
+      deleteScenario: (id) => set((st) => ({ scenarios: st.scenarios.filter((x) => x.id !== id) })),
+      loadScenario: (id) => {
+        const sc = get().scenarios.find((x) => x.id === id)
+        if (sc) set({ plan: sc.plan })
+      },
 
       patchRoute: (routeId, patch) =>
         set((s) =>
@@ -411,6 +443,7 @@ function snapshot(s: TmsState) {
     audit: s.audit,
     settings: s.settings,
     plan: s.plan,
+    scenarios: s.scenarios,
   }
 }
 
@@ -442,6 +475,7 @@ function hydrateFromRemote(
       ...(authRole ? { role: authRole } : {}),
     } as Settings,
     plan: (remote.plan ?? null) as PlanResult | null,
+    scenarios: (remote.scenarios ?? []) as Scenario[],
   })
   applyingRemote = false
 }

@@ -212,6 +212,7 @@ app.get('/api/state', requireAuth, async (_req, res) => {
       audit: byKey.audit ?? [],
       settings: byKey.settings ?? null,
       plan: byKey.plan ?? null,
+      scenarios: byKey.scenarios ?? [],
     })
   } catch (e) {
     res.status(500).json({ error: 'load failed' })
@@ -246,7 +247,7 @@ app.put('/api/state', rateLimit, requireAuth, requireRole('admin', 'dispatcher')
             ])
           }
         }
-        for (const key of ['settings', 'plan', 'audit']) {
+        for (const key of ['settings', 'plan', 'audit', 'scenarios']) {
           await client.query(
             `INSERT INTO singletons (key, doc) VALUES ($1, $2)
              ON CONFLICT (key) DO UPDATE SET doc = EXCLUDED.doc`,

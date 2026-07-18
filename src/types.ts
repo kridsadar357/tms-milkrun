@@ -23,6 +23,22 @@ export interface RateCard {
 
 export type Shift = 'day' | 'night'
 
+/** A saved plan snapshot for A/B comparison and history. */
+export interface Scenario {
+  id: string
+  name: string
+  createdAt: string
+  shift: Shift
+  objective: OptimizeObjective
+  plan: PlanResult
+  // Cached totals (computed at save time so comparisons are stable)
+  totalCost: number
+  distanceKm: number
+  trucks: number
+  co2Kg: number
+  unassigned: number
+}
+
 export interface TransportPartner {
   id: string
   code: string

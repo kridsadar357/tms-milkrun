@@ -16,6 +16,7 @@ export interface ApiState {
   audit?: unknown[]
   settings?: Record<string, unknown> | null
   plan?: unknown
+  scenarios?: unknown[]
 }
 
 /** Re-seed the database with the canonical sample dataset (server-side). */

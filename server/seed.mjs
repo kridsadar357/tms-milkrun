@@ -46,7 +46,7 @@ async function insertSeed(pool) {
         ])
       }
     }
-    for (const [key, doc] of [['settings', settings], ['plan', null], ['audit', []]]) {
+    for (const [key, doc] of [['settings', settings], ['plan', null], ['audit', []], ['scenarios', []]]) {
       await client.query(
         `INSERT INTO singletons (key, doc) VALUES ($1, $2)
          ON CONFLICT (key) DO UPDATE SET doc = EXCLUDED.doc`,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Scale,
+  CalendarDays, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Save, Scale,
   Spline, Sun, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, UserRound,
 } from 'lucide-react'
 import type { OptimizeObjective } from '../types'
@@ -35,7 +35,8 @@ const NEXT_ACTION: Partial<Record<TripStatus, [TripStatus, string]>> = {
 export default function Planner() {
   const { t, i18n } = useTranslation()
   const { trucks, locations, partners, drivers, plan, settings, setPlan, updateRouteStatus,
-    patchRoute, updatePlanRoutes, updateSettings } = useTms()
+    patchRoute, updatePlanRoutes, updateSettings,
+    scenarios, saveScenario, deleteScenario, loadScenario } = useTms()
   const [busy, setBusy] = useState<null | 'plan' | 'road'>(null)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [excludedTrucks, setExcludedTrucks] = useState<Set<string>>(new Set())
@@ -532,6 +533,55 @@ export default function Planner() {
                     </label>
                   ))}
                 </div>
+              </div>
+            </details>
+          )}
+
+          {/* Save & compare plan scenarios (A/B, history) */}
+          {canEditPlan && (plan || scenarios.length > 0) && (
+            <details className="rounded-xl border border-slate-200 bg-white" open={scenarios.length > 0}>
+              <summary className="px-4 py-2.5 text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-2">
+                <Save size={15} className="text-slate-400" /> {t('planner.scenarios')}
+                {scenarios.length > 0 && <Badge tone="blue">{scenarios.length}</Badge>}
+              </summary>
+              <div className="px-4 pb-3 pt-1">
+                {plan && (
+                  <Button
+                    variant="secondary"
+                    className="mb-2 w-full justify-center"
+                    onClick={() => {
+                      const name = prompt(t('planner.scenarioName'), '')
+                      if (name !== null) saveScenario(name)
+                    }}
+                  >
+                    <Save size={14} /> {t('planner.saveScenario')}
+                  </Button>
+                )}
+                {scenarios.length > 0 && (() => {
+                  const cheapest = Math.min(...scenarios.map((sc) => sc.totalCost))
+                  return (
+                    <div className="space-y-1.5">
+                      {scenarios.map((sc) => (
+                        <div key={sc.id} className="rounded-lg border border-slate-100 p-2 text-xs">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="font-medium text-slate-800 truncate">{sc.name}</span>
+                            {sc.totalCost === cheapest && scenarios.length > 1 && <Badge tone="green">{t('costs.best')}</Badge>}
+                            <span className="ml-auto flex gap-1.5 shrink-0">
+                              <button className="text-brand-600 hover:underline cursor-pointer" onClick={() => loadScenario(sc.id)}>{t('planner.load')}</button>
+                              <button className="text-rose-500 hover:underline cursor-pointer" onClick={() => deleteScenario(sc.id)}>{t('common.delete')}</button>
+                            </span>
+                          </div>
+                          <div className="text-slate-500 tabular-nums">
+                            {sc.trucks} {t('planner.routesCount').toLowerCase()} · {fmt(sc.distanceKm, i18n.language)} {t('common.km')} · ฿{fmt(sc.totalCost, i18n.language)}
+                            {sc.totalCost !== cheapest && scenarios.length > 1 && <span className="text-rose-500"> (+{fmt(sc.totalCost - cheapest, i18n.language)})</span>}
+                            <span className="text-slate-400"> · {t(`planner.shifts.${sc.shift}`)} · {t(`planner.obj.${sc.objective}`)}</span>
+                            {sc.unassigned > 0 && <span className="text-amber-600"> · {t('planner.unassignedN', { n: sc.unassigned })}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
             </details>
           )}
