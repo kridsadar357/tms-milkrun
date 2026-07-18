@@ -12,7 +12,7 @@ import { applyRoadData, fetchRoadRoute } from '../lib/directions'
 import { fetchDistanceMatrix } from '../lib/matrix'
 import { exportToExcel } from '../lib/excel'
 import MapView, { ROUTE_COLORS } from '../components/MapView'
-import { Badge, Button, Card, PageHeader } from '../components/ui'
+import { Badge, Button, Card } from '../components/ui'
 import { estimateCo2Kg, type DeliveryLocation, type PlannedRoute, type TripStatus } from '../types'
 import { dailyRouteCost } from '../lib/cost'
 
@@ -307,44 +307,46 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
   const canPlan = activeTrucks.length > 0 && activeLocations.length > 0
 
   return (
-    <div className="h-full flex flex-col">
-      <PageHeader
-        title={t('planner.title')}
-        actions={
-          <>
-            {plan && (
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  exportToExcel({ partners, trucks, locations, plan, depotName: settings.depotName })
-                }
-              >
-                <FileSpreadsheet size={16} /> {t('common.exportExcel')}
-              </Button>
-            )}
-            {canEditPlan && editHistory.length > 0 && (
-              <Button variant="secondary" onClick={undoEdit} disabled={busy !== null}>
-                <Undo2 size={16} /> {t('planner.undo')}
-              </Button>
-            )}
-            {plan && canEditPlan && (
-              <Button variant="secondary" onClick={() => setPlan(null)}>
-                <Trash2 size={16} /> {t('planner.clearPlan')}
-              </Button>
-            )}
-            {canEditPlan && (
-              <Button onClick={runAutoRoute} disabled={!canPlan || busy !== null}>
-                <Route size={16} />
-                {busy === 'plan'
-                  ? t('planner.planning')
-                  : busy === 'road'
-                    ? t('planner.roadGeometry')
-                    : t('planner.autoRoute')}
-              </Button>
-            )}
-          </>
-        }
+    <div className="relative h-full">
+      {/* Full-bleed map; all map tools sit on the left / bottom-left. */}
+      <MapView
+        token={mapToken}
+        depot={depot}
+        locations={locations}
+        routes={routes}
+        selectedRouteId={selectedRouteId}
+        routeLabel={(r) => {
+          const truck = truckById.get(r.truckId)
+          return `${truck?.plateNumber ?? r.truckId} · ${t('planner.round')} ${r.round} · ${r.distanceKm} ${t('common.km')}`
+        }}
+        className="h-full w-full rounded-xl border border-slate-200"
       />
+
+      {/* Floating control panel — right side, clear of the map's own controls. */}
+      <div className="absolute top-2 right-2 bottom-2 w-[380px] max-w-[calc(100%-1rem)] flex flex-col gap-2 z-20">
+        <div className="bg-white/95 backdrop-blur rounded-xl border border-slate-200 shadow-md px-2 py-1.5 flex items-center gap-1">
+          <span className="text-sm font-semibold text-slate-800 px-1 mr-auto">{t('planner.title')}</span>
+          {plan && (
+            <button title={t('common.exportExcel')} onClick={() => exportToExcel({ partners, trucks, locations, plan, depotName: settings.depotName })}
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer"><FileSpreadsheet size={16} /></button>
+          )}
+          {canEditPlan && editHistory.length > 0 && (
+            <button title={t('planner.undo')} onClick={undoEdit} disabled={busy !== null}
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer disabled:opacity-40"><Undo2 size={16} /></button>
+          )}
+          {plan && canEditPlan && (
+            <button title={t('planner.clearPlan')} onClick={() => setPlan(null)}
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer"><Trash2 size={16} /></button>
+          )}
+          {canEditPlan && (
+            <Button onClick={runAutoRoute} disabled={!canPlan || busy !== null}>
+              <Route size={16} />
+              {busy === 'plan' ? t('planner.planning') : busy === 'road' ? t('planner.roadGeometry') : t('planner.autoRoute')}
+            </Button>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-3 pr-0.5 pb-1">
 
       {!canPlan && (
         <Card className="p-5 mb-4">
@@ -382,21 +384,6 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
         </Card>
       )}
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 min-h-0">
-        <MapView
-          token={mapToken}
-          depot={depot}
-          locations={locations}
-          routes={routes}
-          selectedRouteId={selectedRouteId}
-          routeLabel={(r) => {
-            const truck = truckById.get(r.truckId)
-            return `${truck?.plateNumber ?? r.truckId} · ${t('planner.round')} ${r.round} · ${r.distanceKm} ${t('common.km')}`
-          }}
-          className="min-h-[420px] lg:min-h-0 border border-slate-200 rounded-xl"
-        />
-
-        <div className="overflow-y-auto space-y-3 pr-1">
           {progress && (
             <Card className="p-3 border-brand-200 bg-brand-50">
               <div className="flex items-center gap-2 text-sm text-brand-700 font-medium mb-2">

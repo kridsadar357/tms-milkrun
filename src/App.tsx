@@ -178,9 +178,13 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 min-w-0 overflow-y-auto">
-        <div className="p-6 h-full">
-          {page === 'planner' ? <Planner onNavigate={(p) => setPage(p as Page)} /> : PAGES[page]()}
-        </div>
+        {page === 'planner' ? (
+          <div className="h-full p-2 sm:p-3">
+            <Planner onNavigate={(p) => setPage(p as Page)} />
+          </div>
+        ) : (
+          <div className="p-6 h-full">{PAGES[page]()}</div>
+        )}
       </main>
     </div>
   )

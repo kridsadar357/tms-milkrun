@@ -140,10 +140,12 @@ export default function MapView({
       zoom: 10,
       antialias: true,
       preserveDrawingBuffer: true, // allows screenshots/print of the canvas
+      attributionControl: false, // re-added bottom-left so it never sits under floating panels
     })
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right')
-    map.addControl(new mapboxgl.FullscreenControl(), 'top-right')
+    // Keep every map control on the LEFT so floating app panels can own the right.
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-left')
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left')
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left')
 
     map.on('load', () => {
       loadedRef.current = true
