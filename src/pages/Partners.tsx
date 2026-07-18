@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { newId, useTms } from '../store'
 import {
   Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
 } from '../components/ui'
-import type { TransportPartner } from '../types'
+import type { RateCard, TransportPartner } from '../types'
 
 const emptyForm = {
   code: '', name: '', contactPerson: '', phone: '', email: '', active: true,
@@ -13,17 +13,41 @@ const emptyForm = {
   bankName: '', bankAccountNo: '', bankAccountName: '',
 }
 
+/** Rate-card fields (key, numeric step). adminPct is edited as a percentage. */
+const RATE_FIELDS: [keyof RateCard, string][] = [
+  ['laborPerHr', '1'], ['otPerHr', '1'], ['dropCost', '5'], ['allowancePerKm', '0.1'], ['tripSafety', '1'],
+  ['fuelKmPerL', '0.1'], ['fuelRatePerL', '0.1'], ['otherPerDay', '10'], ['adminPct', '0.5'],
+]
+type RateForm = Record<string, Record<string, string>>
+
 export default function Partners() {
   const { t } = useTranslation()
   const { partners, trucks, upsertPartner, deletePartner } = useTms()
   const [editing, setEditing] = useState<TransportPartner | 'new' | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [rate, setRate] = useState<RateForm>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const truckCount = (id: string) => trucks.filter((tr) => tr.partnerId === id).length
 
+  // Truck types that can have a rate card: those in the fleet + any already on
+  // the partner, falling back to the common 6W / 10W pair.
+  const rateTypes = useMemo(() => {
+    const set = new Set<string>(trucks.map((tr) => tr.type))
+    if (editing && editing !== 'new') Object.keys(editing.costProfile ?? {}).forEach((k) => set.add(k))
+    if (set.size === 0) return ['6W', '10W']
+    return [...set]
+  }, [trucks, editing])
+
   const open = (p: TransportPartner | 'new') => {
     setErrors({})
+    const rf: RateForm = {}
+    if (p !== 'new' && p.costProfile) {
+      for (const [ty, c] of Object.entries(p.costProfile)) {
+        rf[ty] = Object.fromEntries(RATE_FIELDS.map(([k]) => [k, String(k === 'adminPct' ? c[k] * 100 : c[k])]))
+      }
+    }
+    setRate(rf)
     setForm(
       p === 'new'
         ? emptyForm
@@ -46,6 +70,19 @@ export default function Partners() {
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
 
+    // Build the rate card, keeping only truck types with a meaningful entry.
+    const costProfile: Record<string, RateCard> = {}
+    for (const [ty, c] of Object.entries(rate)) {
+      const n = (k: keyof RateCard) => Math.max(0, Number(c[k]) || 0)
+      const card: RateCard = {
+        laborPerHr: n('laborPerHr'), otPerHr: n('otPerHr'), dropCost: n('dropCost'),
+        allowancePerKm: n('allowancePerKm'), tripSafety: n('tripSafety'),
+        fuelKmPerL: n('fuelKmPerL') || 4.5, fuelRatePerL: n('fuelRatePerL') || 31.73,
+        otherPerDay: n('otherPerDay'), adminPct: n('adminPct') / 100,
+      }
+      if (card.laborPerHr || card.allowancePerKm || card.dropCost || card.otherPerDay) costProfile[ty] = card
+    }
+
     upsertPartner({
       id: editing === 'new' || !editing ? newId() : editing.id,
       code: form.code.trim(),
@@ -58,6 +95,7 @@ export default function Partners() {
       ratePerTrip: Math.max(0, Number(form.ratePerTrip) || 0),
       minCharge: Math.max(0, Number(form.minCharge) || 0),
       creditDays: Math.max(0, Math.round(Number(form.creditDays) || 0)),
+      costProfile: Object.keys(costProfile).length ? costProfile : undefined,
       bankName: form.bankName.trim(),
       bankAccountNo: form.bankAccountNo.trim(),
       bankAccountName: form.bankAccountName.trim(),
@@ -176,6 +214,30 @@ export default function Partners() {
                 <input className={inputClass} value={form.bankAccountName} onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })} />
               </Field>
             </div>
+          </fieldset>
+
+          <fieldset className="mt-5">
+            <legend className="text-sm font-semibold text-slate-800 mb-1">{t('partners.rateCardMilkrun')}</legend>
+            <p className="text-xs text-slate-500 mb-3">{t('partners.rateCardMilkrunHint')}</p>
+            {rateTypes.map((ty) => (
+              <div key={ty} className="mb-4 rounded-lg border border-slate-200 p-3">
+                <div className="text-xs font-semibold text-brand-600 mb-2">{ty}</div>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                  {RATE_FIELDS.map(([k, step]) => (
+                    <Field key={k} label={t(`partners.rc.${k}`)}>
+                      <input
+                        className={inputClass}
+                        type="number"
+                        min="0"
+                        step={step}
+                        value={rate[ty]?.[k] ?? ''}
+                        onChange={(e) => setRate((pr) => ({ ...pr, [ty]: { ...pr[ty], [k]: e.target.value } }))}
+                      />
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            ))}
           </fieldset>
 
           <div className="flex justify-end gap-2 mt-6">

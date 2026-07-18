@@ -18,7 +18,7 @@ const emptyForm = {
   code: '', name: '', nameTh: '', kind: 'supplier' as LocationKind, zone: '',
   lat: '', lng: '', demandM3: '0', demandKg: '0', serviceMinutes: '15',
   windowStart: '', windowEnd: '', deliveryDays: [] as number[], active: true,
-  deliveryPlantId: '',
+  deliveryPlantId: '', roundsPerDay: '1',
 }
 
 export default function Locations() {
@@ -65,7 +65,7 @@ export default function Locations() {
             serviceMinutes: String(loc.serviceMinutes),
             windowStart: loc.windowStart, windowEnd: loc.windowEnd,
             deliveryDays: loc.deliveryDays ?? [], active: loc.active,
-            deliveryPlantId: loc.deliveryPlantId ?? '',
+            deliveryPlantId: loc.deliveryPlantId ?? '', roundsPerDay: String(loc.roundsPerDay ?? 1),
           },
     )
     setEditing(loc)
@@ -105,6 +105,7 @@ export default function Locations() {
       deliveryDays: [...form.deliveryDays].sort((a, b) => a - b),
       active: form.active,
       deliveryPlantId: form.kind === 'plant' ? undefined : form.deliveryPlantId || undefined,
+      roundsPerDay: Math.max(1, Number(form.roundsPerDay) || 1),
     })
     setEditing(null)
   }
@@ -331,6 +332,11 @@ export default function Locations() {
                     <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
                   ))}
                 </select>
+              </Field>
+            )}
+            {form.kind !== 'plant' && (
+              <Field label={t('locations.roundsPerDay')} hint={t('locations.roundsPerDayHint')}>
+                <input className={inputClass} type="number" min="1" step="1" value={form.roundsPerDay} onChange={(e) => setForm({ ...form, roundsPerDay: e.target.value })} />
               </Field>
             )}
             <Field label={t('locations.windowStart')}>

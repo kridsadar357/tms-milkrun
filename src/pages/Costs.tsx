@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FileSpreadsheet, Info } from 'lucide-react'
 import { useTms } from '../store'
 import { exportToExcel } from '../lib/excel'
+import { routeCostBreakdown } from '../lib/cost'
 import { Badge, Button, Card, PageHeader, Table } from '../components/ui'
 
 type Tab = 'route' | 'truck' | 'partner'
@@ -21,7 +22,9 @@ export default function Costs() {
     if (!plan) return []
     const routes = plan.routes.map((r) => {
       const truck = truckById.get(r.truckId)
-      const fixed = truck?.fixedCostPerRound ?? 0
+      const bd = truck
+        ? routeCostBreakdown(r, truck, partnerById.get(truck.partnerId))
+        : { fixed: 0, variable: r.cost, total: r.cost }
       return {
         key: r.id,
         label: `${truck?.plateNumber ?? r.truckId} · ${t('planner.round')} ${r.round}`,
@@ -31,9 +34,9 @@ export default function Costs() {
         distanceKm: r.distanceKm,
         m3: r.totalM3,
         kg: r.totalKg,
-        fixed,
-        variable: r.cost - fixed,
-        total: r.cost,
+        fixed: bd.fixed,
+        variable: bd.variable,
+        total: bd.total,
       }
     })
     if (tab === 'route') return routes
