@@ -112,6 +112,8 @@ const minToHm = (min: number) => {
   const m = ((min % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.round(m % 60)).padStart(2, '0')}`
 }
+// Dispatcher pins for the current run: locationId → truckId it must ride.
+let pinnedTruck = new Map<string, string>()
 // Which shift the current planRoutes run uses — picks the night window when set.
 let planShift: 'day' | 'night' = 'day'
 const winStart = (l: DeliveryLocation) => {
@@ -161,6 +163,7 @@ export function planRoutes({
   shift = 'day',
 }: PlanInput): PlanResult {
   planShift = shift
+  pinnedTruck = new Map(locations.filter((l) => l.pinnedTruckId).map((l) => [l.id, l.pinnedTruckId as string]))
   // Route every distance/time query through the real Mapbox matrix when provided.
   if (distanceMatrix) {
     const idx = new Map(distanceMatrix.points.map((p, i) => [ptKey(p), i]))
@@ -189,6 +192,7 @@ export function planRoutes({
     matrixDist = null
     matrixDur = null
     planShift = 'day'
+    pinnedTruck = new Map()
   }
 }
 
@@ -313,12 +317,15 @@ export function planMilkrun(input: PlanInput): PlanResult {
   const order = [...groups.entries()].sort((a, b) => demandM3(b[1]) - demandM3(a[1]))
 
   const roundOf = new Map(locations.map((l) => [l.id, Math.max(1, l.roundsPerDay ?? 1)] as const))
-  let available = trucks.filter((t) => !lockedTruckIds.has(t.id))
+  // Reserve pinned trucks for their stop's plant; the rest form the general pool.
+  const pinnedTruckIds = new Set(locations.map((l) => l.pinnedTruckId).filter(Boolean) as string[])
+  let available = trucks.filter((t) => !lockedTruckIds.has(t.id) && !pinnedTruckIds.has(t.id))
   const routes: PlannedRoute[] = []
   const unassigned: string[] = []
   for (const [key, suppliers] of order) {
     const groupDepot = key && plantById.has(key) ? plantById.get(key)! : depot
-    const res = planRoutes({ ...input, trucks: available, locations: suppliers, depot: groupDepot, lockedRoutes: [] })
+    const pinnedHere = trucks.filter((t) => suppliers.some((s) => s.pinnedTruckId === t.id))
+    const res = planRoutes({ ...input, trucks: [...pinnedHere, ...available], locations: suppliers, depot: groupDepot, lockedRoutes: [] })
     // A loop runs at the cadence of its most-frequent supplier (rounds/day).
     for (const r of res.routes) {
       r.roundsPerDay = Math.max(1, ...r.stops.map((s) => roundOf.get(s.locationId) ?? 1))
@@ -430,6 +437,8 @@ function oneMove(
     for (let b = a + 1; b < parts.length; b++) {
       const B = parts[b]
       if (A.truck.id === B.truck.id) continue
+      // A pinned stop must stay on its truck; swapping trucks would move it.
+      if (A.locs.some((l) => pinnedTruck.has(l.id)) || B.locs.some((l) => pinnedTruck.has(l.id))) continue
       if (loadM3(A.locs) > B.truck.capacityM3 + EPS || loadKg(A.locs) > B.truck.capacityKg + EPS) continue
       if (loadM3(B.locs) > A.truck.capacityM3 + EPS || loadKg(B.locs) > A.truck.capacityKg + EPS) continue
       const before = routeScore(A.truck, A.locs, depot, obj) + routeScore(B.truck, B.locs, depot, obj)
@@ -449,6 +458,7 @@ function oneMove(
     const A = parts[a]
     for (let i = 0; i < A.locs.length; i++) {
       const s = A.locs[i]
+      if (pinnedTruck.has(s.id)) continue // pinned stop stays on its truck
       const aWithout = [...A.locs.slice(0, i), ...A.locs.slice(i + 1)]
       const before = routeScore(A.truck, A.locs, depot, obj)
       const aAfter = routeScore(A.truck, aWithout, depot, obj)
@@ -478,6 +488,7 @@ function oneMove(
         const sA = A.locs[i]
         for (let j = 0; j < B.locs.length; j++) {
           const sB = B.locs[j]
+          if (pinnedTruck.has(sA.id) || pinnedTruck.has(sB.id)) continue // pinned stops don't swap
           if (!capFits(A.truck, A.locs, sB.demandM3 - sA.demandM3, sB.demandKg - sA.demandKg)) continue
           if (!capFits(B.truck, B.locs, sA.demandM3 - sB.demandM3, sA.demandKg - sB.demandKg)) continue
           const aRem = A.locs.filter((_, k) => k !== i)
@@ -501,7 +512,9 @@ function oneMove(
   for (let u = 0; u < unassigned.length; u++) {
     const s = unassigned[u]
     let best: { part: DynPart; pos: number; cost: number } | null = null
+    const pin = pinnedTruck.get(s.id)
     for (const p of parts) {
+      if (pin && pin !== p.truck.id) continue // pinned stop only rejoins its truck
       if (!capFits(p.truck, p.locs, s.demandM3, s.demandKg)) continue
       const ins = bestInsertion(p.locs, s, depot, speed, startMin)
       if (!ins) continue
@@ -640,15 +653,22 @@ function twConstruct(
     let bestIdx = -1
     let bestDist = Infinity
     let bestLate = Infinity
+    // Stops pinned to THIS truck are placed first and are authoritative — they
+    // bypass the capacity and window skips (the schedule flags any overload/late).
+    const pinnedHereLeft = pool.some((l) => pinnedTruck.get(l.id) === truck.id)
     for (let i = 0; i < pool.length; i++) {
       const loc = pool[i]
-      if (respectCapacity && (usedM3 + loc.demandM3 > truck.capacityM3 || usedKg + loc.demandKg > truck.capacityKg)) continue
+      const pin = pinnedTruck.get(loc.id)
+      if (pin && pin !== truck.id) continue // pinned to another truck → never here
+      const forced = pin === truck.id
+      if (pinnedHereLeft && !forced) continue // seat pinned stops before the rest
+      if (!forced && respectCapacity && (usedM3 + loc.demandM3 > truck.capacityM3 || usedKg + loc.demandKg > truck.capacityKg)) continue
       let arrive = clock + travelMin(cursor, loc, speed)
       const ws = winStart(loc)
       if (ws != null && arrive < ws) arrive = ws
       const we = winEnd(loc)
       const late = we != null ? Math.max(0, arrive - we) : 0
-      if (late > 1e-6 && !allowLate) continue // infeasible for a dynamic truck
+      if (late > 1e-6 && !allowLate && !forced) continue // infeasible for a dynamic truck
       const legKm = dist(cursor, loc)
       // Fixed routes prefer the least-late then nearest; dynamic prefer nearest.
       if (allowLate ? late < bestLate - 1e-6 || (Math.abs(late - bestLate) < 1e-6 && legKm < bestDist) : legKm < bestDist) {

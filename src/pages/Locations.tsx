@@ -18,12 +18,12 @@ const emptyForm = {
   code: '', name: '', nameTh: '', kind: 'supplier' as LocationKind, zone: '',
   lat: '', lng: '', demandM3: '0', demandKg: '0', serviceMinutes: '15',
   windowStart: '', windowEnd: '', deliveryDays: [] as number[], active: true,
-  deliveryPlantId: '', roundsPerDay: '1',
+  deliveryPlantId: '', roundsPerDay: '1', pinnedTruckId: '',
 }
 
 export default function Locations() {
   const { t, i18n } = useTranslation()
-  const { locations, settings, upsertLocation, deleteLocation, logAudit } = useTms()
+  const { locations, trucks, settings, upsertLocation, deleteLocation, logAudit } = useTms()
   const canEdit = can(settings.role, 'master')
   const fileRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -66,6 +66,7 @@ export default function Locations() {
             windowStart: loc.windowStart, windowEnd: loc.windowEnd,
             deliveryDays: loc.deliveryDays ?? [], active: loc.active,
             deliveryPlantId: loc.deliveryPlantId ?? '', roundsPerDay: String(loc.roundsPerDay ?? 1),
+            pinnedTruckId: loc.pinnedTruckId ?? '',
           },
     )
     setEditing(loc)
@@ -106,6 +107,7 @@ export default function Locations() {
       active: form.active,
       deliveryPlantId: form.kind === 'plant' ? undefined : form.deliveryPlantId || undefined,
       roundsPerDay: Math.max(1, Number(form.roundsPerDay) || 1),
+      pinnedTruckId: form.kind === 'plant' ? undefined : form.pinnedTruckId || undefined,
     })
     setEditing(null)
   }
@@ -337,6 +339,16 @@ export default function Locations() {
             {form.kind !== 'plant' && (
               <Field label={t('locations.roundsPerDay')} hint={t('locations.roundsPerDayHint')}>
                 <input className={inputClass} type="number" min="1" step="1" value={form.roundsPerDay} onChange={(e) => setForm({ ...form, roundsPerDay: e.target.value })} />
+              </Field>
+            )}
+            {form.kind !== 'plant' && (
+              <Field label={t('locations.pinnedTruck')} hint={t('locations.pinnedTruckHint')}>
+                <select className={inputClass} value={form.pinnedTruckId} onChange={(e) => setForm({ ...form, pinnedTruckId: e.target.value })}>
+                  <option value="">{t('locations.pinnedTruckNone')}</option>
+                  {trucks.map((tr) => (
+                    <option key={tr.id} value={tr.id}>{tr.plateNumber}</option>
+                  ))}
+                </select>
               </Field>
             )}
             <Field label={t('locations.windowStart')}>

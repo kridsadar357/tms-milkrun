@@ -101,6 +101,7 @@ export interface DeliveryLocation {
   deliveryDays: number[] // weekdays served, 0=Sun..6=Sat ([] = every day)
   active: boolean
   roundsPerDay?: number // milkrun pickup frequency (default 1); loop runs this often
+  pinnedTruckId?: string // dispatcher override: this stop must be served by this truck
   // Milkrun: the plant (a kind:'plant' location) this supplier's goods are delivered
   // to. When set, Auto Route builds a loop that starts/ends at that plant instead of
   // the global depot. Empty = use the global depot (single-depot mode).
