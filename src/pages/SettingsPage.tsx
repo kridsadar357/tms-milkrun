@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Building2, Check, Fuel, History, LogOut, Moon, ShieldCheck, Sun } from 'lucide-react'
+import { Building2, Check, Fuel, History, LogOut, Moon, ShieldCheck, Sun, Upload } from 'lucide-react'
 import { useTms } from '../store'
 import { validateCoords } from '../lib/geo'
 import { can } from '../lib/permissions'
 import { logout } from '../lib/auth'
+import { parseAisinWorkbook, type ImportResult } from '../lib/importAisin'
 import { Badge, Button, Card, Field, PageHeader, Table, inputClass } from '../components/ui'
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation()
-  const { settings, trucks, audit, updateSettings, upsertTruck, resetToSeed, clearAll } = useTms()
+  const { settings, trucks, audit, updateSettings, upsertTruck, resetToSeed, clearAll, importMasterData } = useTms()
   const isAdmin = can(settings.role, 'admin')
+  const [imp, setImp] = useState<ImportResult | null>(null)
+  const [impErr, setImpErr] = useState<string | null>(null)
   const [form, setForm] = useState({
     mapboxToken: settings.mapboxToken,
     depotName: settings.depotName,
@@ -260,6 +263,58 @@ export default function SettingsPage() {
       {isAdmin && (
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-800 mb-3">{t('settings.dataMgmt')}</h2>
+
+          {/* Import a milkrun planning workbook (.xlsx) → plants, suppliers, trucks, rate cards */}
+          <div className="mb-4">
+            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-sm text-slate-700 cursor-pointer">
+              <Upload size={15} /> {t('settings.importXlsx')}
+              <input
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!file) return
+                  setImp(null); setImpErr(null)
+                  try {
+                    setImp(await parseAisinWorkbook(await file.arrayBuffer()))
+                  } catch (err) {
+                    setImpErr(err instanceof Error ? err.message : String(err))
+                  }
+                }}
+              />
+            </label>
+            <p className="text-xs text-slate-400 mt-1">{t('settings.importXlsxHint')}</p>
+            {impErr && <p className="text-xs text-rose-600 mt-2">{impErr}</p>}
+            {imp && (
+              <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm">
+                <p className="text-slate-700 mb-1">
+                  {t('settings.importPreview', {
+                    plants: imp.locations.filter((l) => l.kind === 'plant').length,
+                    suppliers: imp.locations.filter((l) => l.kind !== 'plant').length,
+                    trucks: imp.trucks.length,
+                    partners: imp.partners.length,
+                  })}
+                </p>
+                {imp.warnings.length > 0 && (
+                  <p className="text-xs text-amber-700 mb-2">⚠ {imp.warnings.slice(0, 3).join('; ')}{imp.warnings.length > 3 ? '…' : ''}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      importMasterData({ partners: imp.partners, trucks: imp.trucks, drivers: [], locations: imp.locations })
+                      setImp(null)
+                    }}
+                  >
+                    <Check size={15} /> {t('settings.importApply')}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setImp(null)}>{t('common.cancel')}</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => confirm(t('settings.resetConfirm')) && resetToSeed()}>
               {t('settings.resetSeed')}

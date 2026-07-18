@@ -106,6 +106,7 @@ export interface TmsState {
   deleteDriver: (id: string) => void
   upsertLocation: (l: DeliveryLocation) => void
   deleteLocation: (id: string) => void
+  importMasterData: (data: { partners?: TransportPartner[]; trucks?: Truck[]; drivers?: Driver[]; locations?: DeliveryLocation[] }) => void
   upsertProduct: (p: Product) => void
   deleteProduct: (id: string) => void
   setPlan: (plan: PlanResult | null) => void
@@ -207,6 +208,21 @@ export const useTms = create<TmsState>()((set, get) => ({
         const label = get().locations.find((x) => x.id === id)?.code ?? id
         set((s) => ({ locations: s.locations.filter((x) => x.id !== id), plan: null }))
         get().logAudit('delete', 'location', label)
+      },
+      importMasterData: (data) => {
+        set((s) => ({
+          partners: data.partners ?? s.partners,
+          trucks: data.trucks ?? s.trucks,
+          drivers: data.drivers ?? s.drivers,
+          locations: data.locations ?? s.locations,
+          plan: null,
+        }))
+        const parts = [
+          data.locations && `${data.locations.length} locations`,
+          data.trucks && `${data.trucks.length} trucks`,
+          data.partners && `${data.partners.length} partners`,
+        ].filter(Boolean).join(', ')
+        get().logAudit('import', 'master data', parts)
       },
       upsertProduct: (p) => set((s) => ({ products: upsert(s.products, p) })),
       deleteProduct: (id) => set((s) => ({ products: s.products.filter((x) => x.id !== id) })),
