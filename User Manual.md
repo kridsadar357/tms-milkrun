@@ -53,8 +53,12 @@ supplier, plant, warehouse, and customer locations.
 - **Rate-card costing** — each transporter has a detailed **rate card** (labor +
   OT, fuel, km-allowance, drop-points, daily fixed, admin %); the plan is priced
   as a real daily cost, with a **transporter comparison** (who is cheapest).
-- **Interactive editing** — drag to reorder stops, reassign a stop, lock a route,
-  and run “what-if” fleet scenarios with before/after savings.
+- **Excel onboarding** — import a milkrun planning workbook (.xlsx) and it builds
+  the plants, suppliers, fleet, and rate cards in one step.
+- **Interactive editing & control** — drag to reorder stops, reassign a stop,
+  **pin a supplier to a truck**, lock a route, run “what-if” fleet scenarios with
+  before/after savings, and **save/compare named plan scenarios**. Unassigned
+  stops carry a **reason** (too big / window unreachable / no truck free).
 - **Operations** — trip status workflow, proof of delivery, delay tracking,
   printable driver route sheets.
 - **Finance** — Thai VAT 7% / withholding tax 1%, invoices, statements, manifest,
@@ -72,11 +76,14 @@ roughly ฿33k/day.
 
 ## 1a. Milkrun workflow (end to end)
 
-1. **Master data** — add **plants** (Delivery Locations with type *Plant*) and
-   **suppliers** (type *Supplier*); on each supplier set its **Delivery plant**,
-   **Pickups per day**, demand (m³/kg), and pickup window. Add **Trucks** (6W/10W
-   with m³ + kg capacity) tied to a **Transport Partner**, and give each partner a
-   **Milkrun rate card** per truck type.
+1. **Master data** — the fast way is **Settings → Data Management → Import milkrun
+   workbook (.xlsx)**: it reads your `Data` / `Location` / `Cost` sheets and
+   creates the plants, suppliers (with delivery plant, pickups/day, day + night
+   windows), the 6W/10W fleet, and every transporter's rate card in one step
+   ([§13.5](#135-import-a-milkrun-workbook)). Or enter it by hand: add **plants**
+   (Delivery Locations, type *Plant*) and **suppliers** (type *Supplier*) with
+   **Delivery plant**, **Pickups per day**, demand, and window; add **Trucks**
+   tied to a **Transport Partner** that has a **Milkrun rate card**.
 2. **Choose the run** — in **Route Planner** pick **Optimize for** (Lowest cost is
    the default), the **Shift** (Day/Night), and optionally a **weekday** and a
    **what-if** fleet (exclude trucks).
@@ -175,6 +182,7 @@ Each location has:
 | Delivery Window | Earliest / latest time (HH:MM) |
 | **Delivery plant** (suppliers) | The **Plant** location this supplier delivers to — turns on **milkrun mode**: Auto Route loops the truck back to this plant. Leave as *Global depot* for single-depot planning. |
 | **Pickups per day** (suppliers) | How often this supplier is collected (1–3). The milkrun loop runs at the cadence of its most-frequent supplier. |
+| **Pin to truck** (suppliers) | Dispatcher override — force this supplier onto a specific truck. Auto Route always keeps it there (it bypasses the capacity/window skips, so a pin is never silently dropped); leave *Auto* to let the optimizer decide. |
 | Delivery Days | Which weekdays the stop is served (empty = every day) — drives multi-day planning |
 
 > **Milkrun tip:** create your plants first (type *Plant*), then set each
@@ -273,7 +281,9 @@ optimizer:
    the roads** and re-prices it with real distance.
 
 Each **route card** shows truck, driver, partner, round, trip status, volume/
-weight utilization, distance, duration, cost, and estimated **CO₂**.
+weight utilization, distance, duration, cost, and estimated **CO₂**. In milkrun
+mode it also shows a **→ PLANT** badge (the plant this truck serves) and a
+**×N rounds/day** badge — so *why* a stop is on a given truck is explicit.
 
 **Time windows are enforced.** Arrival times run from the depot departure clock
 (**Settings → Depot Departure**, default 08:00). A stop is only assigned to a
@@ -282,8 +292,15 @@ window** — the truck waits if it arrives early, and a stop that can’t be rea
 in time is left unassigned. Fixed cyclic routes keep all their stops but flag any
 late arrival. Selected-route stops show an **In window** / **Late Nm** badge.
 
-Stops that don’t fit any truck **or can’t meet their time window** appear under
-**Unassigned Stops** — add trucks, rounds, or widen the window.
+Stops that couldn’t be placed appear under **Unassigned Stops**, each with a
+**reason chip** so you know what to fix:
+
+- **Too big for any truck** — its m³ or kg exceeds every vehicle → add a bigger
+  truck or split the demand.
+- **Window unreachable** — it can’t be reached in time even alone → widen the
+  window or use the other shift.
+- **No truck free** — it fits, but the fleet was full → add trucks or rounds, or
+  free one in **Fleet — what-if**.
 
 ### 5.2 The map
 
@@ -314,7 +331,18 @@ Click a route card to expand its **stop list**, then:
 - After any re-plan, a **Savings vs previous plan** banner shows the change in
   cost, distance, and CO₂ (green = reduced).
 
-### 5.5 Multi-day planning
+### 5.5 Scenarios (save & compare)
+
+The **Scenarios** panel keeps named plan snapshots so you can compare options
+instead of juggling spreadsheet tabs. Run a plan, click **Save current plan**, and
+name it (e.g. *“Day + Yusen”*, *“extra 10W”*, *“Night shift”*). Each saved scenario
+lists its **trucks · km · ฿**, tags the **cheapest**, and shows every other one’s
+**gap versus it**; **Load** brings a scenario back as the active plan, **Delete**
+removes it. Scenarios are stored in the database, so they persist across sessions
+(up to 20 kept). Typical use: save a Day plan, switch to Night or add a truck,
+re-run, save again, and read the cost difference straight off the panel.
+
+### 5.6 Multi-day planning
 
 Locations can carry a **delivery-day schedule** (which weekdays they need
 service — set in Delivery Locations; empty = every day). In the Planner, the
@@ -325,7 +353,7 @@ service — set in Delivery Locations; empty = every day). In the Planner, the
 - see a **Weekly demand** overview (stops and m³ per weekday) to balance the
   week at a glance.
 
-### 5.6 Export — simulation report
+### 5.7 Export — simulation report
 
 **Export Excel** (on the Planner and Cost Summary) produces a styled multi-sheet
 **simulation report**: a Summary of KPIs, the **Routes** (stop-by-stop), a **Cost**
@@ -528,6 +556,24 @@ column headers as the CSV export (`Code, Name, NameTH, Kind, Zone, Lat, Lng,
 DemandM3, DemandKg, ServiceMin, WindowStart, WindowEnd, Active`). Rows whose
 `Code` matches an existing location **update** it; others are **created**.
 Coordinates are validated and invalid rows are skipped.
+
+### 13.5 Import a milkrun workbook
+
+**Settings → Data Management → Import milkrun workbook (.xlsx)** (admin) loads a
+whole network from a planning spreadsheet in one step — the fastest way to
+onboard. It reads three sheets:
+
+- **Data** — supplier→plant lanes (loading time, rounds/day, m³, kg, delivery
+  plant, day + night pickup windows),
+- **Location** — codes, names, and `lat, long` coordinates,
+- **Cost** — each transporter’s rate card per truck type (labor, OT, fuel, drop,
+  allowance, other/day, admin, plus night rates).
+
+It creates the **plants**, **supplier stops** (linked to their plant, with
+cadence and windows), a **6W/10W fleet**, and the **transporter partners with
+rate cards**. You get a preview (“7 plants, 15 suppliers, 12 trucks, 5
+transporters”) and any missing-coordinate warnings before you confirm **Import &
+replace**. After importing, just open the Planner and click **Auto Route**.
 
 ---
 
