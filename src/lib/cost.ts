@@ -71,6 +71,50 @@ export function dailyRouteCost(route: PlannedRoute, truck: Truck, partner: Trans
   return (rounds * trip + card.otherPerDay) * (1 + card.adminPct)
 }
 
+export interface CostComposition {
+  labor: number; fuel: number; allowance: number; drops: number; tripFee: number; other: number; admin: number; total: number
+}
+
+/**
+ * Aggregate a plan's daily cost into its rate-card components (where the money
+ * goes): labor+OT, fuel, km-allowance, drop-points, trip fee, daily fixed, and
+ * admin overhead. Routes without a rate card contribute their fixed cost to
+ * `other` and their per-km cost to `fuel`, so the total always reconciles.
+ */
+export function planCostComposition(
+  routes: PlannedRoute[],
+  truckById: Map<string, Truck>,
+  partners: TransportPartner[],
+): CostComposition {
+  const partnerById = new Map(partners.map((p) => [p.id, p]))
+  const acc: CostComposition = { labor: 0, fuel: 0, allowance: 0, drops: 0, tripFee: 0, other: 0, admin: 0, total: 0 }
+  for (const route of routes) {
+    const truck = truckById.get(route.truckId)
+    if (!truck) continue
+    const rounds = Math.max(1, route.roundsPerDay ?? 1)
+    const card = partnerById.get(truck.partnerId)?.costProfile?.[truck.type]
+    if (!card) {
+      acc.other += rounds * truck.fixedCostPerRound
+      acc.fuel += rounds * truck.costPerKm * route.distanceKm
+      continue
+    }
+    const rt = shiftRates(card, routeShift(route))
+    const h = route.durationMinutes / 60
+    const labor = Math.min(h, 8) * rt.laborPerHr + Math.max(0, h - 8) * rt.otPerHr
+    const fuel = rt.fuelKmPerL > 0 ? (route.distanceKm / rt.fuelKmPerL) * card.fuelRatePerL : 0
+    const subtotal = rounds * (labor + fuel + route.distanceKm * card.allowancePerKm + route.stops.length * card.dropCost + card.tripSafety) + card.otherPerDay
+    acc.labor += rounds * labor
+    acc.fuel += rounds * fuel
+    acc.allowance += rounds * route.distanceKm * card.allowancePerKm
+    acc.drops += rounds * route.stops.length * card.dropCost
+    acc.tripFee += rounds * card.tripSafety
+    acc.other += card.otherPerDay
+    acc.admin += subtotal * card.adminPct
+  }
+  acc.total = acc.labor + acc.fuel + acc.allowance + acc.drops + acc.tripFee + acc.other + acc.admin
+  return acc
+}
+
 /**
  * Split a route's daily cost into fixed vs variable (distance/stop-driven), for
  * the Cost Summary. With a rate card: variable = fuel + km-allowance + drops;

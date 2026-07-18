@@ -1,8 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Boxes, Clock, FileDown, Gauge, Info, Recycle, RefreshCw, Route as RouteIcon,
-  Timer, TriangleAlert,
+  Boxes, Clock, FileDown, Info, Recycle, Route as RouteIcon, Timer, TriangleAlert,
 } from 'lucide-react'
 import { useTms } from '../store'
 import { computeMilkrunStats } from '../lib/analytics'
@@ -21,6 +20,14 @@ export default function Analytics() {
     () => computeMilkrunStats({ plan, trucks, locations, products, pods, incidents, audit, settings }),
     [plan, trucks, locations, products, pods, incidents, audit, settings],
   )
+
+  const leadTimes = useMemo(() => {
+    if (!plan) return []
+    return plan.routes.filter((r) => r.stops.length > 0).map((r) => {
+      const tr = trucks.find((x) => x.id === r.truckId)
+      return { id: r.id, label: tr?.plateNumber ?? r.truckId, min: r.durationMinutes, stops: r.stops.length }
+    }).sort((a, b) => b.min - a.min)
+  }, [plan, trucks])
 
   const exportSummary = () =>
     exportCsv(
@@ -73,16 +80,21 @@ export default function Analytics() {
         }
       />
 
-      {/* Milkrun principle KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi icon={<RefreshCw size={18} />} label={t('analytics.cyclicRotation')} value={`${s.cyclicRotationPct}%`}
+      {/* Milkrun principle rings */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <RingCard pct={s.cyclicRotationPct} color="#2a78d6" label={t('analytics.cyclicRotation')}
           sub={`${s.fixedRoutes} ${t('analytics.fixed')} · ${s.dynamicRoutes} ${t('analytics.dynamic')}`} />
-        <Kpi icon={<Timer size={18} />} label={t('analytics.shortLeadTime')} value={`${s.avgLeadTimeMin} ${t('common.min')}`}
-          sub={`${t('analytics.max')} ${s.maxLeadTimeMin} ${t('common.min')}`} />
-        <Kpi icon={<Gauge size={18} />} label={t('analytics.loadingEfficiency')} value={`${s.loadingEfficiencyPct}%`}
+        <RingCard pct={s.loadingEfficiencyPct} color="#1baf7a" label={t('analytics.loadingEfficiency')}
           sub={`${t('planner.weight')} ${s.avgUtilKg}%`} />
-        <Kpi icon={<RefreshCw size={18} />} label={t('analytics.flexibility')} value={`${s.podCompletionPct}%`}
+        <RingCard pct={s.windowStops > 0 ? s.windowCompliancePct : 0} color="#008300" label={t('analytics.timeWindows')}
+          sub={`${s.withinWindow}/${s.windowStops} ${t('analytics.withinWindow')}`} disabled={s.windowStops === 0} />
+        <RingCard pct={s.podCompletionPct} color="#eda100" label={t('analytics.flexibility')}
           sub={`${s.incidentsOpen} ${t('analytics.openIncidents')} · ${s.changes} ${t('analytics.changes')}`} />
+        <Card className="p-4 flex flex-col justify-center">
+          <div className="flex items-center gap-2 text-slate-400 mb-1.5"><Timer size={18} /><span className="text-xs font-medium text-slate-500">{t('analytics.shortLeadTime')}</span></div>
+          <p className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">{s.avgLeadTimeMin} <span className="text-base font-normal text-slate-400">{t('common.min')}</span></p>
+          <p className="text-[11px] text-slate-400 mt-1.5">{t('analytics.max')} {s.maxLeadTimeMin} {t('common.min')}</p>
+        </Card>
       </div>
 
       {/* 1. Truck routing */}
@@ -118,6 +130,25 @@ export default function Analytics() {
               ))}
             </tbody>
           </table>
+        </div>
+      </Section>
+
+      {/* Route lead-time (cycle time per loop) */}
+      <Section icon={<Timer size={16} />} title={t('analytics.leadTimeByRoute')}>
+        <p className="text-xs text-slate-500 mb-3">{t('analytics.leadTimeHint')}</p>
+        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          {leadTimes.map((r) => {
+            const h = Math.floor(r.min / 60), m = r.min % 60
+            return (
+              <div key={r.id} className="grid grid-cols-[minmax(0,8rem)_1fr_auto] items-center gap-3 text-sm">
+                <span className="text-slate-700 truncate">{r.label} <span className="text-slate-400 text-xs">· {r.stops} {t('planner.stops')}</span></span>
+                <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${(r.min / leadTimes[0].min) * 100}%`, background: r.min > 8 * 60 ? '#e6a100' : SERIES_1 }} />
+                </div>
+                <span className="text-slate-500 tabular-nums whitespace-nowrap w-16 text-right">{h > 0 ? `${h}h ` : ''}{m}m</span>
+              </div>
+            )
+          })}
         </div>
       </Section>
 
@@ -186,15 +217,21 @@ export default function Analytics() {
 
 /* -------------------------- little chart pieces ------------------------- */
 
-function Kpi({ icon, label, value, sub }: { icon: ReactNode; label: string; value: string; sub?: string }) {
+function RingCard({ pct, color, label, sub, disabled }: { pct: number; color: string; label: string; sub?: string; disabled?: boolean }) {
+  const r = 30, c = 2 * Math.PI * r
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-2 text-slate-400 mb-2">
-        {icon}
-        <span className="text-xs font-medium text-slate-500">{label}</span>
+    <Card className="p-4 flex items-center gap-3">
+      <div className="relative shrink-0">
+        <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
+          <circle cx="36" cy="36" r={r} fill="none" stroke="currentColor" strokeWidth="6" className="text-slate-100" />
+          {!disabled && <circle cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} style={{ transition: 'stroke-dashoffset .6s' }} />}
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-slate-900 tabular-nums">{disabled ? '—' : `${pct}%`}</span>
       </div>
-      <p className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">{value}</p>
-      {sub && <p className="text-[11px] text-slate-400 mt-1.5">{sub}</p>}
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-slate-700 leading-tight">{label}</div>
+        {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
+      </div>
     </Card>
   )
 }
