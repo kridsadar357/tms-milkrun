@@ -231,6 +231,54 @@ function planRoutesInner({
   }
 }
 
+/** True when the network is a milkrun: some plant depots + some supplier→plant links. */
+export function isMilkrun(locations: DeliveryLocation[]): boolean {
+  return locations.some((l) => l.kind === 'plant') && locations.some((l) => l.deliveryPlantId)
+}
+
+/**
+ * Multi-depot milkrun planner. Suppliers are grouped by their destination plant
+ * and each group is routed as a loop that starts/ends at THAT plant (a
+ * kind:'plant' location) — so a truck only carries goods bound for one plant.
+ * Suppliers with no destination plant fall back to the global depot. The fleet is
+ * partitioned across plants (bigger clusters claim trucks first); every group
+ * reuses the shared distance matrix, objective, and time windows of planRoutes.
+ */
+export function planMilkrun(input: PlanInput): PlanResult {
+  const { trucks, locations, depot, lockedRoutes = [] } = input
+  const plantById = new Map(locations.filter((l) => l.kind === 'plant').map((l) => [l.id, l] as const))
+  const lockedLocIds = new Set(lockedRoutes.flatMap((r) => r.stops.map((s) => s.locationId)))
+  const lockedTruckIds = new Set(lockedRoutes.map((r) => r.truckId))
+
+  // Group deliverable suppliers by destination plant ('' = global depot).
+  const groups = new Map<string, DeliveryLocation[]>()
+  for (const l of locations) {
+    if (l.kind === 'plant' || lockedLocIds.has(l.id)) continue
+    const key = l.deliveryPlantId && plantById.has(l.deliveryPlantId) ? l.deliveryPlantId : ''
+    const arr = groups.get(key)
+    if (arr) arr.push(l)
+    else groups.set(key, [l])
+  }
+  const demandM3 = (ls: DeliveryLocation[]) => ls.reduce((n, l) => n + l.demandM3, 0)
+  const order = [...groups.entries()].sort((a, b) => demandM3(b[1]) - demandM3(a[1]))
+
+  let available = trucks.filter((t) => !lockedTruckIds.has(t.id))
+  const routes: PlannedRoute[] = []
+  const unassigned: string[] = []
+  for (const [key, suppliers] of order) {
+    const groupDepot = key && plantById.has(key) ? plantById.get(key)! : depot
+    const res = planRoutes({ ...input, trucks: available, locations: suppliers, depot: groupDepot, lockedRoutes: [] })
+    routes.push(...res.routes)
+    unassigned.push(...res.unassignedLocationIds)
+    const used = new Set(res.routes.map((r) => r.truckId))
+    available = available.filter((t) => !used.has(t.id))
+  }
+
+  const merged = [...lockedRoutes, ...routes]
+  merged.forEach((r, i) => { r.colorIndex = i % 8 })
+  return { routes: merged, unassignedLocationIds: unassigned, plannedAt: new Date().toISOString() }
+}
+
 /* --------------------- inter-route local search (VRP) --------------------- */
 
 interface DynPart {

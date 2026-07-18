@@ -20,6 +20,11 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
   large stop sets): cost and sequencing use true road **distances** and time
   windows / ETAs use true road **travel times** — not haversine or a constant
   speed — then it snaps the route polyline to roads via **Mapbox Directions**.
+- **Multi-depot milkrun** — give a supplier a **destination plant** and Auto Route
+  groups suppliers by plant and builds a loop that **starts and ends at that plant**
+  (a `plant` location), so a truck only carries goods bound for one plant; the
+  fleet is partitioned across plants. Suppliers with no plant use the global depot
+  (single-depot mode). Road-snapping and manual edits respect each route's plant.
 - **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
   rotation) or is assigned **dynamically** by the optimizer.
 - **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading

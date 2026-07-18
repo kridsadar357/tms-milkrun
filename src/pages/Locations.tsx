@@ -18,6 +18,7 @@ const emptyForm = {
   code: '', name: '', nameTh: '', kind: 'supplier' as LocationKind, zone: '',
   lat: '', lng: '', demandM3: '0', demandKg: '0', serviceMinutes: '15',
   windowStart: '', windowEnd: '', deliveryDays: [] as number[], active: true,
+  deliveryPlantId: '',
 }
 
 export default function Locations() {
@@ -64,6 +65,7 @@ export default function Locations() {
             serviceMinutes: String(loc.serviceMinutes),
             windowStart: loc.windowStart, windowEnd: loc.windowEnd,
             deliveryDays: loc.deliveryDays ?? [], active: loc.active,
+            deliveryPlantId: loc.deliveryPlantId ?? '',
           },
     )
     setEditing(loc)
@@ -102,6 +104,7 @@ export default function Locations() {
       windowEnd: form.windowEnd,
       deliveryDays: [...form.deliveryDays].sort((a, b) => a - b),
       active: form.active,
+      deliveryPlantId: form.kind === 'plant' ? undefined : form.deliveryPlantId || undefined,
     })
     setEditing(null)
   }
@@ -316,6 +319,20 @@ export default function Locations() {
                 {zones.map((z) => <option key={z} value={z} />)}
               </datalist>
             </Field>
+            {form.kind !== 'plant' && (
+              <Field label={t('locations.deliveryPlant')} hint={t('locations.deliveryPlantHint')}>
+                <select
+                  className={inputClass}
+                  value={form.deliveryPlantId}
+                  onChange={(e) => setForm({ ...form, deliveryPlantId: e.target.value })}
+                >
+                  <option value="">{t('locations.useGlobalDepot')}</option>
+                  {locations.filter((l) => l.kind === 'plant').map((p) => (
+                    <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label={t('locations.windowStart')}>
               <input className={inputClass} type="time" value={form.windowStart} onChange={(e) => setForm({ ...form, windowStart: e.target.value })} />
             </Field>

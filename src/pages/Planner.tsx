@@ -7,7 +7,7 @@ import {
 import type { OptimizeObjective } from '../types'
 import { effectiveMapboxToken, useTms } from '../store'
 import { can } from '../lib/permissions'
-import { planRoutes, rebuildRoute, servesDay } from '../lib/optimizer'
+import { isMilkrun, planMilkrun, planRoutes, rebuildRoute, servesDay } from '../lib/optimizer'
 import { applyRoadData, fetchRoadRoute } from '../lib/directions'
 import { fetchDistanceMatrix } from '../lib/matrix'
 import { exportToExcel } from '../lib/excel'
@@ -56,6 +56,19 @@ export default function Planner() {
   const mapToken = effectiveMapboxToken(settings)
   const canEditPlan = can(settings.role, 'plan')
 
+  // A milkrun route starts/ends at its stops' destination plant, not the global
+  // depot — road-snapping and manual re-routing must use that plant as the depot.
+  const plantById = useMemo(() => new Map(locations.filter((l) => l.kind === 'plant').map((l) => [l.id, l])), [locations])
+  const depotForRoute = useCallback(
+    (route: PlannedRoute) => {
+      const first = route.stops[0] && locById.get(route.stops[0].locationId)
+      const plant = first?.deliveryPlantId ? plantById.get(first.deliveryPlantId) : undefined
+      return plant ? { lat: plant.lat, lng: plant.lng, name: plant.name } : depot
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locById, plantById, depot.lat, depot.lng],
+  )
+
   // Scheduled demand per weekday (for the multi-day overview).
   const weekly = useMemo(() => {
     const act = locations.filter((l) => l.active && (l.demandM3 > 0 || l.demandKg > 0))
@@ -80,7 +93,7 @@ export default function Planner() {
         const stops = route.stops
           .map((s) => locById.get(s.locationId))
           .filter((l): l is NonNullable<typeof l> => !!l)
-        const road = truck ? await fetchRoadRoute(mapToken, depot, stops).catch(() => null) : null
+        const road = truck ? await fetchRoadRoute(mapToken, depotForRoute(route), stops).catch(() => null) : null
         upgraded.push(
           road && truck
             ? applyRoadData(
@@ -97,7 +110,7 @@ export default function Planner() {
       setBusy(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [truckById, locById, mapToken, depot.lat, depot.lng, setPlan],
+    [truckById, locById, mapToken, depot.lat, depot.lng, setPlan, depotForRoute],
   )
 
   const summarize = (rs: PlannedRoute[]): Totals => ({
@@ -125,21 +138,25 @@ export default function Planner() {
     const lockedRoutes = (plan?.routes ?? []).filter((r) => r.locked)
     const usableTrucks = trucks.filter((tr) => !excludedTrucks.has(tr.id))
 
+    // Milkrun mode routes each supplier back to its own destination plant.
+    const milkrun = isMilkrun(locations)
+
     // When road geometry is on, plan on REAL Mapbox road distances: fetch a
-    // distance matrix over the depot + the stops that will actually be routed.
+    // distance matrix over the depot, every plant, and the stops to be routed.
     let distanceMatrix
     if (settings.useRoadGeometry && mapToken) {
       const lockedIds = new Set(lockedRoutes.flatMap((r) => r.stops.map((s) => s.locationId)))
       const planStops = locations.filter(
         (l) => l.active && (l.demandM3 > 0 || l.demandKg > 0) && !lockedIds.has(l.id) && servesDay(l, planDay ?? undefined),
       )
+      const plants = milkrun ? locations.filter((l) => l.kind === 'plant') : []
       setBusy('road')
-      distanceMatrix = (await fetchDistanceMatrix(mapToken, [depot, ...planStops])) ?? undefined
+      distanceMatrix = (await fetchDistanceMatrix(mapToken, [depot, ...plants, ...planStops])) ?? undefined
       setBusy('plan')
       await new Promise((r) => setTimeout(r, 30))
     }
 
-    const result = planRoutes({
+    const args = {
       trucks: usableTrucks,
       locations,
       depot,
@@ -149,7 +166,8 @@ export default function Planner() {
       planStartTime: settings.planStartTime,
       objective: settings.optimizeObjective,
       distanceMatrix,
-    })
+    }
+    const result = milkrun ? planMilkrun(args) : planRoutes(args)
     setPlan(result)
     setSavings(prev ? diff(prev, summarize(result.routes)) : null)
 
@@ -180,7 +198,7 @@ export default function Planner() {
         }
         const truck = truckById.get(route.truckId)
         const stops = routeLocs(route)
-        const road = truck ? await fetchRoadRoute(mapToken, depot, stops).catch(() => null) : null
+        const road = truck ? await fetchRoadRoute(mapToken, depotForRoute(route), stops).catch(() => null) : null
         out.push(
           road && truck
             ? applyRoadData(route, road, stops.reduce((a, l) => a + l.serviceMinutes, 0), truck.fixedCostPerRound, truck.costPerKm)
@@ -190,7 +208,7 @@ export default function Planner() {
       return out
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [settings.useRoadGeometry, mapToken, truckById, routeLocs, depot.lat, depot.lng],
+    [settings.useRoadGeometry, mapToken, truckById, routeLocs, depot.lat, depot.lng, depotForRoute],
   )
 
   const applyEdit = async (nextRoutes: PlannedRoute[]) => {
@@ -212,7 +230,7 @@ export default function Planner() {
     const locs = routeLocs(route)
     const [moved] = locs.splice(from, 1)
     locs.splice(to, 0, moved)
-    const rebuilt = rebuildRoute(route, locs, truck, depot, settings.avgSpeedKmh)
+    const rebuilt = rebuildRoute(route, locs, truck, depotForRoute(route), settings.avgSpeedKmh)
     applyEdit(routes.map((r) => (r.id === routeId ? rebuilt : r)))
   }
 
@@ -224,8 +242,8 @@ export default function Planner() {
     const toTruck = to && truckById.get(to.truckId)
     const moved = locById.get(locationId)
     if (!from || !to || !fromTruck || !toTruck || !moved) return
-    const newFrom = rebuildRoute(from, routeLocs(from).filter((l) => l.id !== locationId), fromTruck, depot, settings.avgSpeedKmh)
-    const newTo = rebuildRoute(to, [...routeLocs(to), moved], toTruck, depot, settings.avgSpeedKmh)
+    const newFrom = rebuildRoute(from, routeLocs(from).filter((l) => l.id !== locationId), fromTruck, depotForRoute(from), settings.avgSpeedKmh)
+    const newTo = rebuildRoute(to, [...routeLocs(to), moved], toTruck, depotForRoute(to), settings.avgSpeedKmh)
     applyEdit(routes.map((r) => (r.id === fromId ? newFrom : r.id === toId ? newTo : r)))
   }
 

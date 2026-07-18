@@ -73,6 +73,10 @@ export interface DeliveryLocation {
   windowEnd: string // latest delivery 'HH:MM' ('' = none)
   deliveryDays: number[] // weekdays served, 0=Sun..6=Sat ([] = every day)
   active: boolean
+  // Milkrun: the plant (a kind:'plant' location) this supplier's goods are delivered
+  // to. When set, Auto Route builds a loop that starts/ends at that plant instead of
+  // the global depot. Empty = use the global depot (single-depot mode).
+  deliveryPlantId?: string
 }
 
 export interface RouteStop {
