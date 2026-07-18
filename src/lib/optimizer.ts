@@ -62,6 +62,39 @@ export interface PlanInput {
   shift?: 'day' | 'night'
 }
 
+export type UnassignedReason = 'capacity' | 'window' | 'fleet'
+
+/**
+ * Best-effort reason a stop couldn't be placed, for the Unassigned list:
+ *  - 'capacity' — its m³ or kg exceeds every truck (no vehicle can carry it),
+ *  - 'window'   — even reached alone from its depot it arrives after its window,
+ *  - 'fleet'    — it fits, but no truck had room left (add trucks/rounds).
+ * Uses a haversine estimate, so it's a hint rather than a proof.
+ */
+export function explainUnassigned(
+  loc: DeliveryLocation,
+  trucks: Truck[],
+  depot: LatLng,
+  avgSpeedKmh: number,
+  startMin: number,
+  shift: 'day' | 'night' = 'day',
+): UnassignedReason {
+  const active = trucks.filter((t) => t.active)
+  const maxM3 = Math.max(0, ...active.map((t) => t.capacityM3))
+  const maxKg = Math.max(0, ...active.map((t) => t.capacityKg))
+  if (loc.demandM3 > maxM3 + 1e-6 || loc.demandKg > maxKg + 1e-6) return 'capacity'
+  const wsRaw = shift === 'night' ? loc.windowStartNight || loc.windowStart : loc.windowStart
+  const weRaw = shift === 'night' ? loc.windowEndNight || loc.windowEnd : loc.windowEnd
+  if (weRaw) {
+    const start = wsRaw ? hmToMin(wsRaw) : null
+    let end = hmToMin(weRaw)
+    if (start != null && end < start) end += 1440
+    const arrive = startMin + (roadKm(depot, loc) / avgSpeedKmh) * 60
+    if (arrive > end + 1e-6) return 'window'
+  }
+  return 'fleet'
+}
+
 /** A location is served on a day if it has no schedule, or lists that weekday. */
 export function servesDay(loc: DeliveryLocation, day: number | undefined): boolean {
   if (day == null) return true

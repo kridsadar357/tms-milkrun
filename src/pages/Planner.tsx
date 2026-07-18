@@ -7,7 +7,7 @@ import {
 import type { OptimizeObjective } from '../types'
 import { effectiveMapboxToken, useTms } from '../store'
 import { can } from '../lib/permissions'
-import { isMilkrun, planMilkrun, planRoutes, rebuildRoute, servesDay } from '../lib/optimizer'
+import { explainUnassigned, isMilkrun, planMilkrun, planRoutes, rebuildRoute, servesDay } from '../lib/optimizer'
 import { applyRoadData, fetchRoadRoute } from '../lib/directions'
 import { fetchDistanceMatrix } from '../lib/matrix'
 import { exportToExcel } from '../lib/excel'
@@ -60,15 +60,23 @@ export default function Planner() {
   // A milkrun route starts/ends at its stops' destination plant, not the global
   // depot — road-snapping and manual re-routing must use that plant as the depot.
   const plantById = useMemo(() => new Map(locations.filter((l) => l.kind === 'plant').map((l) => [l.id, l])), [locations])
-  const depotForRoute = useCallback(
-    (route: PlannedRoute) => {
-      const first = route.stops[0] && locById.get(route.stops[0].locationId)
-      const plant = first?.deliveryPlantId ? plantById.get(first.deliveryPlantId) : undefined
+  const depotForLoc = useCallback(
+    (loc: DeliveryLocation) => {
+      const plant = loc.deliveryPlantId ? plantById.get(loc.deliveryPlantId) : undefined
       return plant ? { lat: plant.lat, lng: plant.lng, name: plant.name } : depot
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [locById, plantById, depot.lat, depot.lng],
+    [plantById, depot.lat, depot.lng],
   )
+  const depotForRoute = useCallback(
+    (route: PlannedRoute) => {
+      const first = route.stops[0] && locById.get(route.stops[0].locationId)
+      return first ? depotForLoc(first) : depot
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locById, depotForLoc, depot.lat, depot.lng],
+  )
+  const usableTrucksForExplain = useMemo(() => trucks.filter((tr) => !excludedTrucks.has(tr.id)), [trucks, excludedTrucks])
 
   // Re-price every route with the transporter's rate card (falls back to the
   // truck's simple fixed + per-km cost when no rate card exists).
@@ -531,6 +539,8 @@ export default function Planner() {
           {routes.map((route) => {
             const truck = truckById.get(route.truckId)
             const partner = truck ? partnerById.get(truck.partnerId) : undefined
+            const firstStop = route.stops[0] && locById.get(route.stops[0].locationId)
+            const routePlant = firstStop?.deliveryPlantId ? plantById.get(firstStop.deliveryPlantId) : undefined
             const utilM3 = truck ? Math.round((route.totalM3 / truck.capacityM3) * 100) : 0
             const utilKg = truck ? Math.round((route.totalKg / truck.capacityKg) * 100) : 0
             const selected = selectedRouteId === route.id
@@ -552,6 +562,7 @@ export default function Planner() {
                     <span className="font-semibold text-slate-800">
                       {truck?.plateNumber ?? route.truckId}
                     </span>
+                    {routePlant && <Badge tone="slate">{t('planner.toPlant', { plant: routePlant.code })}</Badge>}
                     <Badge tone="blue">
                       {t('planner.round')} {route.round}
                     </Badge>
@@ -723,12 +734,19 @@ export default function Planner() {
                 <TriangleAlert size={16} /> {t('planner.unassigned')} ({plan.unassignedLocationIds.length})
               </div>
               <p className="text-xs text-amber-700 mb-2">{t('planner.unassignedHint')}</p>
-              <ul className="text-xs text-amber-900 space-y-0.5">
+              <ul className="text-xs text-amber-900 space-y-1">
                 {plan.unassignedLocationIds.map((id) => {
                   const loc = locById.get(id)
+                  if (!loc) return null
+                  const reason = explainUnassigned(
+                    loc, usableTrucksForExplain, depotForLoc(loc), settings.avgSpeedKmh,
+                    settings.shift === 'night' ? 20 * 60 : 8 * 60, settings.shift,
+                  )
+                  const tone = reason === 'capacity' ? 'red' : reason === 'window' ? 'amber' : 'slate'
                   return (
-                    <li key={id}>
-                      {loc?.code} — {i18n.language === 'th' ? loc?.nameTh || loc?.name : loc?.name} ({loc?.demandM3} {t('common.m3')} / {fmt(loc?.demandKg ?? 0, i18n.language)} {t('common.kg')})
+                    <li key={id} className="flex items-center gap-1.5">
+                      <span>{loc.code} — {i18n.language === 'th' ? loc.nameTh || loc.name : loc.name} ({loc.demandM3} {t('common.m3')} / {fmt(loc.demandKg, i18n.language)} {t('common.kg')})</span>
+                      <Badge tone={tone}>{t(`planner.unreason.${reason}`)}</Badge>
                     </li>
                   )
                 })}
