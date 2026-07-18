@@ -262,12 +262,17 @@ export function planMilkrun(input: PlanInput): PlanResult {
   const demandM3 = (ls: DeliveryLocation[]) => ls.reduce((n, l) => n + l.demandM3, 0)
   const order = [...groups.entries()].sort((a, b) => demandM3(b[1]) - demandM3(a[1]))
 
+  const roundOf = new Map(locations.map((l) => [l.id, Math.max(1, l.roundsPerDay ?? 1)] as const))
   let available = trucks.filter((t) => !lockedTruckIds.has(t.id))
   const routes: PlannedRoute[] = []
   const unassigned: string[] = []
   for (const [key, suppliers] of order) {
     const groupDepot = key && plantById.has(key) ? plantById.get(key)! : depot
     const res = planRoutes({ ...input, trucks: available, locations: suppliers, depot: groupDepot, lockedRoutes: [] })
+    // A loop runs at the cadence of its most-frequent supplier (rounds/day).
+    for (const r of res.routes) {
+      r.roundsPerDay = Math.max(1, ...r.stops.map((s) => roundOf.get(s.locationId) ?? 1))
+    }
     routes.push(...res.routes)
     unassigned.push(...res.unassignedLocationIds)
     const used = new Set(res.routes.map((r) => r.truckId))

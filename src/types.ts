@@ -1,5 +1,22 @@
 /** Core domain types for the TMS Milkrun system. */
 
+/**
+ * Detailed transporter rate card for one truck type — the components of a real
+ * milkrun trip price. When a partner has one for a truck's type, it overrides the
+ * simple fixedCostPerRound + costPerKm estimate in cost reporting.
+ */
+export interface RateCard {
+  laborPerHr: number // driver labor THB/hr (first 8h)
+  otPerHr: number // overtime THB/hr (beyond 8h)
+  dropCost: number // THB per drop point (stop)
+  allowancePerKm: number // THB/km allowance
+  tripSafety: number // flat THB per trip (trip/safety/NGV)
+  fuelKmPerL: number // fuel economy km per litre
+  fuelRatePerL: number // diesel THB/litre
+  otherPerDay: number // fixed other cost THB/day
+  adminPct: number // admin overhead as a fraction (0.08 = 8%)
+}
+
 export interface TransportPartner {
   id: string
   code: string
@@ -13,6 +30,8 @@ export interface TransportPartner {
   ratePerTrip: number // flat THB per trip/round (0 = none)
   minCharge: number // minimum THB per invoice (0 = none)
   creditDays: number // payment terms in days
+  // Detailed milkrun rate card keyed by truck type ('6W' | '10W' | …)
+  costProfile?: Record<string, RateCard>
   // Bank details for payment batch files
   bankName: string
   bankAccountNo: string
@@ -73,6 +92,7 @@ export interface DeliveryLocation {
   windowEnd: string // latest delivery 'HH:MM' ('' = none)
   deliveryDays: number[] // weekdays served, 0=Sun..6=Sat ([] = every day)
   active: boolean
+  roundsPerDay?: number // milkrun pickup frequency (default 1); loop runs this often
   // Milkrun: the plant (a kind:'plant' location) this supplier's goods are delivered
   // to. When set, Auto Route builds a loop that starts/ends at that plant instead of
   // the global depot. Empty = use the global depot (single-depot mode).
@@ -100,6 +120,7 @@ export interface PlannedRoute {
   durationMinutes: number
   cost: number
   colorIndex: number // categorical palette slot
+  roundsPerDay?: number // milkrun: times this loop runs per day (default 1)
   status?: TripStatus // execution status (defaults to 'planned')
   startTime?: string // planned departure clock 'HH:MM' (defaults to 08:00)
   locked?: boolean // excluded from Auto Route re-optimization

@@ -168,6 +168,7 @@ const en = {
     unitCost: 'Unit cost',
     routesCount: 'Routes',
     unassignedN: '{{n}} stop(s) unassigned',
+    roundsPerDay: '×{{n}} rounds/day',
   },
   locations: {
     title: 'Delivery Locations',
@@ -687,6 +688,7 @@ const th: typeof en = {
     unitCost: 'ต้นทุนต่อหน่วย',
     routesCount: 'เส้นทาง',
     unassignedN: 'ยังไม่ได้จัดรถ {{n}} จุด',
+    roundsPerDay: '×{{n}} รอบ/วัน',
   },
   locations: {
     title: 'จุดส่งสินค้า',

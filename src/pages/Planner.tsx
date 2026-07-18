@@ -14,6 +14,7 @@ import { exportToExcel } from '../lib/excel'
 import MapView, { ROUTE_COLORS } from '../components/MapView'
 import { Badge, Button, Card, PageHeader } from '../components/ui'
 import { estimateCo2Kg, type DeliveryLocation, type PlannedRoute, type TripStatus } from '../types'
+import { dailyRouteCost } from '../lib/cost'
 
 interface Totals { cost: number; distanceKm: number; co2: number }
 interface Savings { cost: number; distanceKm: number; co2: number }
@@ -69,6 +70,17 @@ export default function Planner() {
     [locById, plantById, depot.lat, depot.lng],
   )
 
+  // Re-price every route with the transporter's rate card (falls back to the
+  // truck's simple fixed + per-km cost when no rate card exists).
+  const priceRoutes = useCallback(
+    (rs: PlannedRoute[]) =>
+      rs.map((r) => {
+        const truck = truckById.get(r.truckId)
+        return truck ? { ...r, cost: Math.round(dailyRouteCost(r, truck, partnerById.get(truck.partnerId)) * 100) / 100 } : r
+      }),
+    [truckById, partnerById],
+  )
+
   // Scheduled demand per weekday (for the multi-day overview).
   const weekly = useMemo(() => {
     const act = locations.filter((l) => l.active && (l.demandM3 > 0 || l.demandKg > 0))
@@ -106,11 +118,11 @@ export default function Planner() {
             : route,
         )
       }
-      setPlan({ ...result, routes: upgraded })
+      setPlan({ ...result, routes: priceRoutes(upgraded) })
       setBusy(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [truckById, locById, mapToken, depot.lat, depot.lng, setPlan, depotForRoute],
+    [truckById, locById, mapToken, depot.lat, depot.lng, setPlan, depotForRoute, priceRoutes],
   )
 
   const summarize = (rs: PlannedRoute[]): Totals => ({
@@ -167,7 +179,8 @@ export default function Planner() {
       objective: settings.optimizeObjective,
       distanceMatrix,
     }
-    const result = milkrun ? planMilkrun(args) : planRoutes(args)
+    const raw = milkrun ? planMilkrun(args) : planRoutes(args)
+    const result = { ...raw, routes: priceRoutes(raw.routes) }
     setPlan(result)
     setSavings(prev ? diff(prev, summarize(result.routes)) : null)
 
@@ -213,11 +226,11 @@ export default function Planner() {
 
   const applyEdit = async (nextRoutes: PlannedRoute[]) => {
     const cleaned = nextRoutes.filter((r) => r.stops.length > 0)
-    updatePlanRoutes(cleaned)
+    updatePlanRoutes(priceRoutes(cleaned))
     if (settings.useRoadGeometry && mapToken && cleaned.some((r) => !r.geometry)) {
       setBusy('road')
       const snapped = await snapChanged(cleaned)
-      updatePlanRoutes(snapped)
+      updatePlanRoutes(priceRoutes(snapped))
       setBusy(null)
     }
   }
@@ -517,6 +530,9 @@ export default function Planner() {
                     <Badge tone="blue">
                       {t('planner.round')} {route.round}
                     </Badge>
+                    {(route.roundsPerDay ?? 1) > 1 && (
+                      <Badge tone="amber">{t('planner.roundsPerDay', { n: route.roundsPerDay })}</Badge>
+                    )}
                     <Badge tone={STATUS_TONE[route.status ?? 'planned']}>
                       {t(`planner.statuses.${route.status ?? 'planned'}`)}
                     </Badge>

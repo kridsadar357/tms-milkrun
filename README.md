@@ -25,6 +25,13 @@ capacity-constrained auto-routing, Mapbox visualization, and cost analytics.
   (a `plant` location), so a truck only carries goods bound for one plant; the
   fleet is partitioned across plants. Suppliers with no plant use the global depot
   (single-depot mode). Road-snapping and manual edits respect each route's plant.
+  Each supplier has a **rounds/day cadence** and each transporter a **detailed rate
+  card** (labor + OT, fuel, km-allowance, drop-points, daily fixed, admin %); the
+  Planner prices routes as **daily cost = rounds × trip + fixed, ×(1+admin)**.
+- **Aisin demo dataset** — the sample seed is a real Aisin inbound-milkrun network:
+  7 plants, 15 supplier lanes (m³/kg, pickup windows, 1–3 rounds/day), a Yusen
+  6W/10W fleet, and five transporter rate cards. Auto Route reproduces an
+  8-route milkrun at ~฿33k/day.
 - **Fixed / Dynamic assignment** — each truck runs a **fixed cyclic route** (cyclic
   rotation) or is assigned **dynamically** by the optimizer.
 - **Milkrun Analytics** — KPIs and charts for cyclic rotation, lead-time, loading
