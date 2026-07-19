@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { newId, useTms } from '../store'
 import {
-  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
+  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Stat, Table, inputClass,
 } from '../components/ui'
 import type { AssignmentMode, Truck, TruckType } from '../types'
 
@@ -28,6 +28,7 @@ const emptyForm = {
 export default function Trucks() {
   const { t, i18n } = useTranslation()
   const { trucks, partners, drivers, locations, upsertTruck, deleteTruck } = useTms()
+  const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 })
   const [editing, setEditing] = useState<Truck | 'new' | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -95,6 +96,25 @@ export default function Trucks() {
           </Button>
         }
       />
+
+      {(() => {
+        const active = trucks.filter((tr) => tr.active)
+        const byType = new Map<string, number>()
+        active.forEach((tr) => byType.set(tr.type, (byType.get(tr.type) ?? 0) + 1))
+        const capM3 = active.reduce((s, tr) => s + tr.capacityM3 * Math.max(1, tr.roundsPerDay), 0)
+        const capKg = active.reduce((s, tr) => s + tr.capacityKg * Math.max(1, tr.roundsPerDay), 0)
+        const avgKm = active.length ? active.reduce((s, tr) => s + tr.costPerKm, 0) / active.length : 0
+        const fixedCount = active.filter((tr) => tr.assignmentMode === 'fixed').length
+        return trucks.length === 0 ? null : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+            <Stat primary label={t('dashboard.fleet')} value={String(active.length)} sub={[...byType.entries()].map(([ty, n]) => `${n} ${ty}`).join(' · ')} />
+            <Stat label={`${t('trucks.capacity')} (${t('common.kg')})`} value={fmt(capKg)} sub={`${t('trucks.roundsPerDay')} ${t('common.all')}`} />
+            <Stat label={`${t('trucks.capacity')} (${t('common.m3')})`} value={fmt(capM3)} />
+            <Stat label={t('trucks.costPerKm')} value={`฿${avgKm.toFixed(1)}`} sub={t('dashboard.fleet')} />
+            <Stat label={t('trucks.assignmentMode')} value={`${fixedCount} / ${active.length - fixedCount}`} sub={`${t('trucks.fixed')} / ${t('trucks.dynamic')}`} />
+          </div>
+        )
+      })()}
 
       <Card>
         <Table

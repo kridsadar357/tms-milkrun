@@ -75,6 +75,7 @@ const en = {
     importFailed: 'Import failed — check the CSV columns',
     viewerReadonly: 'Read-only — your role cannot make changes',
     all: 'All',
+    of: 'of',
     baht: 'THB',
     km: 'km',
     kg: 'kg',
@@ -265,6 +266,8 @@ const en = {
     licenseType: 'License Class',
     phone: 'Phone',
     truck: 'Assigned Truck',
+    assigned: 'assigned',
+    trucksCovered: 'trucks covered',
     unassigned: 'Unassigned',
   },
   partners: {
@@ -667,6 +670,7 @@ const th: typeof en = {
     importFailed: 'นำเข้าไม่สำเร็จ — กรุณาตรวจสอบคอลัมน์ในไฟล์ CSV',
     viewerReadonly: 'อ่านอย่างเดียว — สิทธิ์ของคุณไม่สามารถแก้ไขได้',
     all: 'ทั้งหมด',
+    of: 'จาก',
     baht: 'บาท',
     km: 'กม.',
     kg: 'กก.',
@@ -857,6 +861,8 @@ const th: typeof en = {
     licenseType: 'ประเภทใบขับขี่',
     phone: 'โทรศัพท์',
     truck: 'รถที่มอบหมาย',
+    assigned: 'มอบหมายแล้ว',
+    trucksCovered: 'รถที่มีคนขับ',
     unassigned: 'ยังไม่มอบหมาย',
   },
   partners: {

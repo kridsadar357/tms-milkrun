@@ -18,6 +18,23 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   )
 }
 
+/** Compact summary tile for master-data overview bands. */
+export function Stat({ label, value, sub, tone, primary }: {
+  label: string; value: ReactNode; sub?: ReactNode
+  tone?: 'green' | 'amber' | 'red' | 'brand'; primary?: boolean
+}) {
+  const v = primary ? 'text-white'
+    : tone === 'green' ? 'text-emerald-600' : tone === 'amber' ? 'text-amber-600'
+    : tone === 'red' ? 'text-rose-600' : tone === 'brand' ? 'text-brand-600' : 'text-slate-900'
+  return (
+    <div className={`rounded-xl border shadow-sm p-4 ${primary ? 'bg-brand-500 border-brand-500' : 'bg-white border-slate-200'}`}>
+      <div className={`text-xs font-medium mb-2 ${primary ? 'text-white/80' : 'text-slate-500'}`}>{label}</div>
+      <p className={`text-xl font-bold tabular-nums leading-none ${v}`}>{value}</p>
+      {sub && <p className={`text-[11px] mt-1.5 truncate ${primary ? 'text-white/70' : 'text-slate-400'}`}>{sub}</p>}
+    </div>
+  )
+}
+
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 const buttonStyles: Record<ButtonVariant, string> = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700',

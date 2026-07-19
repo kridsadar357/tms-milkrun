@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Pencil, Plus, Trash2, Search } from 'lucide-react'
 import { newId, useTms } from '../store'
 import {
-  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
+  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Stat, Table, inputClass,
 } from '../components/ui'
 import type { Product } from '../types'
 
@@ -121,6 +121,25 @@ export default function Products() {
           </Button>
         }
       />
+
+      {(() => {
+        const active = products.filter((p) => p.active)
+        const wooden = active.filter((p) => p.palletType === 'wooden').length
+        const plastic = active.filter((p) => p.palletType === 'plastic').length
+        const none = active.filter((p) => (p.palletType ?? 'none') === 'none').length
+        const returnable = wooden + plastic
+        const withProducts = new Set(active.map((p) => p.supplierId)).size
+        const pct = active.length ? Math.round((returnable / active.length) * 100) : 0
+        return products.length === 0 ? null : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+            <Stat primary label={t('products.title')} value={String(active.length)} sub={`${products.length - active.length} ${t('common.inactive').toLowerCase()}`} />
+            <Stat label={t('analytics.returnable')} value={`${pct}%`} sub={`${returnable} ${t('common.of')} ${active.length}`} tone="green" />
+            <Stat label={t('analytics.wooden')} value={String(wooden)} />
+            <Stat label={t('analytics.plastic')} value={String(plastic)} />
+            <Stat label={t('analytics.oneWay')} value={String(none)} sub={`${withProducts} ${t('dashboard.suppliers').toLowerCase()}`} tone={none > 0 ? 'amber' : undefined} />
+          </div>
+        )
+      })()}
 
       {/* SEARCH AND FILTERS */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

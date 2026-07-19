@@ -4,7 +4,7 @@ import { FileDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import { newId, useTms } from '../store'
 import { exportCsv } from '../lib/csv'
 import {
-  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
+  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Stat, Table, inputClass,
 } from '../components/ui'
 import type { Driver } from '../types'
 
@@ -86,6 +86,22 @@ export default function Drivers() {
           </>
         }
       />
+
+      {(() => {
+        const active = drivers.filter((d) => d.active)
+        const assigned = active.filter((d) => d.truckId).length
+        const byLicense = new Map<string, number>()
+        active.forEach((d) => byLicense.set(d.licenseType || '—', (byLicense.get(d.licenseType || '—') ?? 0) + 1))
+        const trucksWithDriver = new Set(active.map((d) => d.truckId).filter(Boolean)).size
+        return drivers.length === 0 ? null : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <Stat primary label={t('drivers.title')} value={String(active.length)} sub={`${drivers.length - active.length} ${t('common.inactive').toLowerCase()}`} />
+            <Stat label={t('drivers.truck')} value={`${assigned}/${active.length}`} sub={t('drivers.assigned')} tone={assigned < active.length ? 'amber' : 'green'} />
+            <Stat label={t('dashboard.fleet')} value={`${trucksWithDriver}/${trucks.filter((tr) => tr.active).length}`} sub={t('drivers.trucksCovered')} />
+            <Stat label={t('drivers.licenseType')} value={[...byLicense.entries()].map(([k, n]) => `${n} ${k}`).join(' · ') || '—'} />
+          </div>
+        )
+      })()}
 
       <Card>
         <Table

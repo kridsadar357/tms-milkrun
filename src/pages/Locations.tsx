@@ -7,7 +7,7 @@ import { validateCoords } from '../lib/geo'
 import { exportCsv, parseCsv, readFileText } from '../lib/csv'
 import { can } from '../lib/permissions'
 import {
-  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
+  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Stat, Table, inputClass,
 } from '../components/ui'
 import type { DeliveryLocation, LocationKind } from '../types'
 
@@ -207,6 +207,27 @@ export default function Locations() {
       {toast && (
         <Card className="p-3 mb-4 text-sm text-brand-700 bg-brand-50 border-brand-100">{toast}</Card>
       )}
+
+      {(() => {
+        const active = locations.filter((l) => l.active)
+        const plants = active.filter((l) => l.kind === 'plant')
+        const sup = active.filter((l) => l.kind !== 'plant' && (l.demandM3 > 0 || l.demandKg > 0))
+        const dM3 = sup.reduce((s, l) => s + l.demandM3 * Math.max(1, l.roundsPerDay ?? 1), 0)
+        const dKg = sup.reduce((s, l) => s + l.demandKg * Math.max(1, l.roundsPerDay ?? 1), 0)
+        const pinned = active.filter((l) => l.pinnedTruckId).length
+        const linked = sup.filter((l) => l.deliveryPlantId).length
+        const nf = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+        return locations.length === 0 ? null : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+            <Stat primary label={t('locations.title')} value={String(active.length)} sub={`${zones.length} ${t('locations.zone').toLowerCase()}`} />
+            <Stat label={t('dashboard.plants')} value={String(plants.length)} tone="brand" />
+            <Stat label={t('dashboard.suppliers')} value={String(sup.length)} sub={`${linked}/${sup.length} ${t('locations.deliveryPlant').toLowerCase()}`} />
+            <Stat label={`${t('locations.demandKg')}`} value={nf(dKg)} />
+            <Stat label={`${t('locations.demandM3')}`} value={nf(dM3)} />
+            <Stat label={t('locations.pinnedTruck')} value={String(pinned)} tone={pinned > 0 ? 'amber' : undefined} />
+          </div>
+        )
+      })()}
 
       <Card>
         <div className="p-4 border-b border-slate-100 flex flex-wrap gap-2">

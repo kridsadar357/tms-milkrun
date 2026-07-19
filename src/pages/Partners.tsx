@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { newId, useTms } from '../store'
 import {
-  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
+  Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Stat, Table, inputClass,
 } from '../components/ui'
 import type { RateCard, TransportPartner } from '../types'
 
@@ -113,6 +113,25 @@ export default function Partners() {
           </Button>
         }
       />
+
+      {(() => {
+        const withCard = partners.filter((p) => p.costProfile && Object.keys(p.costProfile).length > 0)
+        const assigned = trucks.filter((tr) => partners.some((p) => p.id === tr.partnerId)).length
+        const avgCredit = partners.length ? Math.round(partners.reduce((s, p) => s + p.creditDays, 0) / partners.length) : 0
+        const cheap6 = withCard.map((p) => {
+          const c = p.costProfile!['6W']
+          return c ? { name: p.name, km: (c.fuelKmPerL > 0 ? c.fuelRatePerL / c.fuelKmPerL : 0) + c.allowancePerKm } : null
+        }).filter((x): x is { name: string; km: number } => !!x).sort((a, b) => a.km - b.km)[0]
+        return partners.length === 0 ? null : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+            <Stat primary label={t('partners.title')} value={String(partners.length)} sub={`${partners.filter((p) => p.active).length} ${t('common.active').toLowerCase()}`} />
+            <Stat label={t('partners.rateCardMilkrun')} value={`${withCard.length}/${partners.length}`} tone={withCard.length > 0 ? 'green' : undefined} />
+            <Stat label={t('partners.trucksCount')} value={String(assigned)} />
+            <Stat label={t('partners.creditDays')} value={`${avgCredit}`} sub={t('dashboard.day')} />
+            {cheap6 && <Stat label={`${t('costs.best')} 6W ฿/${t('common.km')}`} value={`฿${cheap6.km.toFixed(2)}`} sub={cheap6.name} tone="green" />}
+          </div>
+        )
+      })()}
 
       <Card>
         <Table
