@@ -353,7 +353,8 @@ export const useTms = create<TmsState>()((set, get) => ({
         for (const r of plan.routes) {
           const truck = truckById.get(r.truckId)
           if (!truck) continue
-          const pid = truck.partnerId
+          // Cross-partner sourcing: bill the transporter this route was sourced to.
+          const pid = r.partnerId ?? truck.partnerId
           const partner = partnerById.get(pid)
           // Route charge from rate card, falling back to planned cost.
           const rateCharge =

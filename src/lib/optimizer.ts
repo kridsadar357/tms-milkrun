@@ -70,6 +70,9 @@ export interface PlanInput {
    * which favors fewer, fuller trucks. Omit to keep the lightweight proxy.
    */
   partners?: TransportPartner[]
+  /** Cross-partner sourcing: cost each route at the cheapest partner that quotes
+   *  its truck type (not just the truck's own partner). Requires `partners`. */
+  crossPartner?: boolean
 }
 
 export type UnassignedReason = 'capacity' | 'window' | 'fleet'
@@ -130,6 +133,8 @@ let planShift: 'day' | 'night' = 'day'
 let planSpeed = 45
 let planStartMin = 480
 let cardOf: ((t: Truck) => RateCard | undefined) | null = null
+// Cross-partner sourcing: all rate cards quoting each truck type (min-cost per route).
+let crossCards: Map<string, RateCard[]> | null = null
 const winStart = (l: DeliveryLocation) => {
   const s = planShift === 'night' ? (l.windowStartNight ?? l.windowStart) : l.windowStart
   return s ? hmToMin(s) : null
@@ -176,6 +181,7 @@ export function planRoutes({
   distanceMatrix,
   shift = 'day',
   partners,
+  crossPartner = false,
 }: PlanInput): PlanResult {
   planShift = shift
   planSpeed = avgSpeedKmh
@@ -184,8 +190,22 @@ export function planRoutes({
   if (partners && partners.length) {
     const partnerById = new Map(partners.map((p) => [p.id, p]))
     cardOf = (t) => partnerById.get(t.partnerId)?.costProfile?.[t.type]
+    // Cross-partner sourcing: gather every card quoting each truck type.
+    if (crossPartner) {
+      crossCards = new Map()
+      for (const p of partners) {
+        for (const type of Object.keys(p.costProfile ?? {})) {
+          const arr = crossCards.get(type) ?? []
+          arr.push(p.costProfile![type])
+          crossCards.set(type, arr)
+        }
+      }
+    } else {
+      crossCards = null
+    }
   } else {
     cardOf = null
+    crossCards = null
   }
   pinnedTruck = new Map(locations.filter((l) => l.pinnedTruckId).map((l) => [l.id, l.pinnedTruckId as string]))
   // Route every distance/time query through the real Mapbox matrix when provided.
@@ -217,6 +237,7 @@ export function planRoutes({
     matrixDur = null
     planShift = 'day'
     cardOf = null
+    crossCards = null
     pinnedTruck = new Map()
   }
 }
@@ -430,21 +451,33 @@ function routeDurationMin(locs: DeliveryLocation[], depot: LatLng): number {
   return clock + travelMin(prev, depot, planSpeed) - planStartMin
 }
 
-/** Full rate-card cost of a route (mirrors cost.ts routeCostBreakdown). */
-function rateCardCost(truck: Truck, locs: DeliveryLocation[], depot: LatLng, distKm: number): number {
-  const card = cardOf?.(truck)
-  const rounds = Math.max(1, ...locs.map((l) => l.roundsPerDay ?? 1))
-  if (!card) return rounds * truck.fixedCostPerRound + rounds * truck.costPerKm * distKm
+/** Cost of a route under one specific rate card (mirrors cost.ts routeCostBreakdown). */
+function cardCost(card: RateCard, rounds: number, durMin: number, distKm: number, stops: number): number {
   const laborPerHr = planShift === 'night' ? (card.nightLaborPerHr ?? card.laborPerHr) : card.laborPerHr
   const otPerHr = planShift === 'night' ? (card.nightOtPerHr ?? card.otPerHr) : card.otPerHr
   const fuelKmPerL = planShift === 'night' ? (card.nightFuelKmPerL ?? card.fuelKmPerL) : card.fuelKmPerL
-  const hours = routeDurationMin(locs, depot) / 60
+  const hours = durMin / 60
   const labor = Math.min(hours, 8) * laborPerHr + Math.max(0, hours - 8) * otPerHr
   const fuel = fuelKmPerL > 0 ? (distKm / fuelKmPerL) * card.fuelRatePerL : 0
-  const variableTrip = fuel + distKm * card.allowancePerKm + locs.length * card.dropCost
+  const variableTrip = fuel + distKm * card.allowancePerKm + stops * card.dropCost
   const fixedTrip = labor + card.tripSafety
   const m = 1 + card.adminPct
   return (rounds * fixedTrip + card.otherPerDay) * m + rounds * variableTrip * m
+}
+
+/** Rate-card cost of a route — cheapest partner for the type when cross-sourcing. */
+function rateCardCost(truck: Truck, locs: DeliveryLocation[], depot: LatLng, distKm: number): number {
+  const rounds = Math.max(1, ...locs.map((l) => l.roundsPerDay ?? 1))
+  const cards = crossCards?.get(truck.type)
+  if (cards && cards.length) {
+    const dur = routeDurationMin(locs, depot)
+    let best = Infinity
+    for (const c of cards) best = Math.min(best, cardCost(c, rounds, dur, distKm, locs.length))
+    return best
+  }
+  const card = cardOf?.(truck)
+  if (!card) return rounds * truck.fixedCostPerRound + rounds * truck.costPerKm * distKm
+  return cardCost(card, rounds, routeDurationMin(locs, depot), distKm, locs.length)
 }
 
 /**

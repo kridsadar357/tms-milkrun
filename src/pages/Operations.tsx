@@ -98,7 +98,7 @@ export default function Operations() {
   const tripRows = useMemo(() => {
     const arr = routes.map((route) => {
       const truck = truckById.get(route.truckId)
-      const partner = truck ? partnerById.get(truck.partnerId) : undefined
+      const partner = truck ? partnerById.get(route.partnerId ?? truck.partnerId) : undefined
       const driver = driverByTruck.get(route.truckId)
       const total = route.stops.length
       let delivered = 0, rOn = 0, rRec = 0

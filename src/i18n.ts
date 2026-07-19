@@ -188,6 +188,8 @@ const en = {
     optimizeFor: 'Optimize for',
     shift: 'Shift',
     shifts: { day: 'Day shift', night: 'Night shift' },
+    crossPartner: 'Cross-transporter sourcing',
+    crossPartnerHint: 'Assign each route to the cheapest transporter (uses every partner\'s rate card).',
     obj: { cost: 'Lowest cost', distance: 'Shortest dist.', balanced: 'Balanced load' },
     objHint: {
       cost: 'Picks the cheapest overall delivery cost (฿) — the cheaper cost/km truck takes the longer route, fewer trucks when that saves money.',
@@ -828,6 +830,8 @@ const th: typeof en = {
     optimizeFor: 'เป้าหมายการจัดเส้นทาง',
     shift: 'กะ',
     shifts: { day: 'กะกลางวัน', night: 'กะกลางคืน' },
+    crossPartner: 'เลือกผู้ขนส่งถูกสุดต่อเส้น',
+    crossPartnerHint: 'จ่ายแต่ละเส้นให้ผู้ขนส่งที่ถูกที่สุด (ใช้ rate card ของทุกเจ้า)',
     obj: { cost: 'ต้นทุนต่ำสุด', distance: 'ระยะสั้นสุด', balanced: 'เกลี่ยภาระ' },
     objHint: {
       cost: 'เลือกต้นทุนส่งรวมถูกที่สุด (฿) — รถที่ค่า/กม.ถูกกว่าจะวิ่งเส้นที่ไกลกว่า และใช้รถน้อยลงเมื่อประหยัดกว่า',

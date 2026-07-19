@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarDays, Check, Coins, FileSpreadsheet, GripVertical, Leaf, Lock, LockOpen, Moon, Route, Save, Scale,
+  CalendarDays, Check, Coins, FileSpreadsheet, GripVertical, Handshake, Leaf, Lock, LockOpen, Moon, Route, Save, Scale,
   Spline, Sun, Trash2, TrendingDown, TriangleAlert, Truck as TruckIcon, Undo2, UserRound,
 } from 'lucide-react'
 import type { OptimizeObjective } from '../types'
@@ -14,7 +14,7 @@ import { exportToExcel } from '../lib/excel'
 import MapView, { ROUTE_COLORS } from '../components/MapView'
 import { Badge, Button, Card } from '../components/ui'
 import { estimateCo2Kg, type DeliveryLocation, type PlannedRoute, type TripStatus } from '../types'
-import { dailyRouteCost } from '../lib/cost'
+import { cheapestPartner, dailyRouteCost } from '../lib/cost'
 
 interface Totals { cost: number; distanceKm: number; co2: number }
 interface Savings { cost: number; distanceKm: number; co2: number }
@@ -89,9 +89,14 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
         const truck = truckById.get(r.truckId)
         if (!truck) return r
         const withShift = { ...r, shift: settings.shift }
-        return { ...withShift, cost: Math.round(dailyRouteCost(withShift, truck, partnerById.get(truck.partnerId)) * 100) / 100 }
+        // Cross-partner sourcing: bill this route to the cheapest transporter.
+        const partner = settings.crossPartner
+          ? cheapestPartner(withShift, truck, partners)
+          : partnerById.get(truck.partnerId)
+        const partnerId = settings.crossPartner && partner ? partner.id : undefined
+        return { ...withShift, partnerId, cost: Math.round(dailyRouteCost(withShift, truck, partner) * 100) / 100 }
       }),
-    [truckById, partnerById, settings.shift],
+    [truckById, partnerById, partners, settings.shift, settings.crossPartner],
   )
 
   // Scheduled demand per weekday (for the multi-day overview).
@@ -200,6 +205,7 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
       distanceMatrix,
       shift: settings.shift,
       partners,
+      crossPartner: settings.crossPartner,
     }
     const raw = milkrun ? planMilkrun(args) : planRoutes(args)
     const result = { ...raw, routes: priceRoutes(raw.routes) }
@@ -505,6 +511,22 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!settings.crossPartner}
+                    onChange={(e) => updateSettings({ crossPartner: e.target.checked })}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                      <Handshake size={15} className="text-slate-400" /> {t('planner.crossPartner')}
+                    </span>
+                    <span className="block text-[11px] text-slate-400 mt-0.5">{t('planner.crossPartnerHint')}</span>
+                  </span>
+                </label>
               </div>
             </div>
           )}

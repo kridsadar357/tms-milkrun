@@ -147,6 +147,8 @@ export interface PlannedRoute {
   colorIndex: number // categorical palette slot
   roundsPerDay?: number // milkrun: times this loop runs per day (default 1)
   shift?: Shift // which shift this loop was planned/priced for (default 'day')
+  partnerId?: string // transporter sourced for this route (cross-partner sourcing); falls back to the truck's own partner
+
   status?: TripStatus // execution status (defaults to 'planned')
   startTime?: string // planned departure clock 'HH:MM' (defaults to 08:00)
   locked?: boolean // excluded from Auto Route re-optimization
@@ -267,6 +269,8 @@ export interface Settings {
   companyAddress: string
   // Send LINE / webhook notifications on key events (dispatch, failed POD)
   lineNotify?: boolean
+  // Cross-partner sourcing: Auto Route assigns each route to the cheapest transporter
+  crossPartner?: boolean
   // Access role for the current session
   role: Role
 }

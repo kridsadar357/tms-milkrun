@@ -35,13 +35,14 @@ export default function Costs() {
     if (!plan) return []
     const routes = plan.routes.map((r) => {
       const truck = truckById.get(r.truckId)
+      const partnerId = r.partnerId ?? truck?.partnerId ?? ''
       const bd = truck
-        ? routeCostBreakdown(r, truck, partnerById.get(truck.partnerId))
+        ? routeCostBreakdown(r, truck, partnerById.get(partnerId))
         : { fixed: 0, variable: r.cost, total: r.cost }
       return {
         key: r.id,
         label: `${truck?.plateNumber ?? r.truckId} · ${t('planner.round')} ${r.round}`,
-        partnerId: truck?.partnerId ?? '',
+        partnerId,
         truckId: r.truckId,
         routes: 1,
         distanceKm: r.distanceKm,
@@ -111,7 +112,7 @@ export default function Costs() {
     if (!plan) return []
     return plan.routes.filter((r) => r.stops.length > 0).map((r) => {
       const tr = truckById.get(r.truckId)
-      const bd = tr ? routeCostBreakdown(r, tr, partnerById.get(tr.partnerId)) : { total: r.cost }
+      const bd = tr ? routeCostBreakdown(r, tr, partnerById.get(r.partnerId ?? tr.partnerId)) : { total: r.cost }
       return { id: r.id, label: tr?.plateNumber ?? r.truckId, total: bd.total, colorIndex: r.colorIndex, km: r.distanceKm, m3: r.totalM3 }
     }).sort((a, b) => b.total - a.total)
   }, [plan, truckById, partnerById])

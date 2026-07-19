@@ -71,6 +71,27 @@ export function dailyRouteCost(route: PlannedRoute, truck: Truck, partner: Trans
   return (rounds * trip + card.otherPerDay) * (1 + card.adminPct)
 }
 
+/** Among partners that quote this truck's type, the one giving the lowest daily cost for the route. */
+export function cheapestPartner(
+  route: PlannedRoute, truck: Truck, partners: TransportPartner[],
+): TransportPartner | undefined {
+  let best: TransportPartner | undefined
+  let bestCost = Infinity
+  for (const p of partners) {
+    if (!p.costProfile?.[truck.type]) continue
+    const c = dailyRouteCost(route, truck, p)
+    if (c < bestCost) { bestCost = c; best = p }
+  }
+  return best
+}
+
+/** The transporter actually sourced for a route — its chosen partner, else the truck's own. */
+export function effectivePartner(
+  route: PlannedRoute, truck: Truck, partnerById: Map<string, TransportPartner>,
+): TransportPartner | undefined {
+  return partnerById.get(route.partnerId ?? truck.partnerId)
+}
+
 export interface CostComposition {
   labor: number; fuel: number; allowance: number; drops: number; tripFee: number; other: number; admin: number; total: number
 }
@@ -92,7 +113,7 @@ export function planCostComposition(
     const truck = truckById.get(route.truckId)
     if (!truck) continue
     const rounds = Math.max(1, route.roundsPerDay ?? 1)
-    const card = partnerById.get(truck.partnerId)?.costProfile?.[truck.type]
+    const card = partnerById.get(route.partnerId ?? truck.partnerId)?.costProfile?.[truck.type]
     if (!card) {
       acc.other += rounds * truck.fixedCostPerRound
       acc.fuel += rounds * truck.costPerKm * route.distanceKm
