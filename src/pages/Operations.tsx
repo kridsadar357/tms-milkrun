@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { newId, useTms } from '../store'
 import { printRouteSheet } from '../lib/routeSheet'
-import { printManifest } from '../lib/documents'
+import { printManifest, printDispatchConfirmation } from '../lib/documents'
 import { ROUTE_COLORS } from '../components/MapView'
 import {
   Badge, Button, Card, Field, Modal, PageHeader, inputClass,
@@ -37,7 +37,7 @@ type SortKey = 'status' | 'plate' | 'driver' | 'departure' | 'progress' | 'ontim
 export default function Operations() {
   const { t, i18n } = useTranslation()
   const { plan, trucks, partners, drivers, locations, pods, incidents, settings,
-    patchRoute, updateRouteStatus, upsertPod, upsertIncident, deleteIncident } = useTms()
+    patchRoute, updateRouteStatus, dispatchAllPlanned, upsertPod, upsertIncident, deleteIncident } = useTms()
 
   const locById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations])
   const truckById = useMemo(() => new Map(trucks.map((tr) => [tr.id, tr])), [trucks])
@@ -139,6 +139,20 @@ export default function Operations() {
   const setAllOpen = (open: boolean) =>
     setOpenMap(Object.fromEntries(tripRows.map((r) => [r.route.id, open])))
 
+  // Release every planned trip at once, then print the day's confirmation doc.
+  const dispatchAll = () => {
+    const n = dispatchAllPlanned()
+    if (n === 0) {
+      setToast(t('ops.dispatchNoneLeft'))
+      setTimeout(() => setToast(null), 3000)
+      return
+    }
+    const fresh = useTms.getState().plan
+    if (fresh) printDispatchConfirmation(fresh, { trucks, drivers, partners, locations, settings })
+    setToast(t('ops.dispatchedN', { n }))
+    setTimeout(() => setToast(null), 4000)
+  }
+
   if (allRoutes.length === 0) {
     return (
       <div>
@@ -156,14 +170,21 @@ export default function Operations() {
         title={t('ops.title')}
         actions={
           plan ? (
-            <Button
-              variant="secondary"
-              onClick={() =>
-                printManifest(plan, { trucks, drivers, partners, locations, settings })
-              }
-            >
-              <Printer size={16} /> {t('doc.manifest')}
-            </Button>
+            <>
+              {ops.status.planned > 0 && (
+                <Button onClick={dispatchAll}>
+                  <Send size={16} /> {t('ops.dispatchAll')} ({ops.status.planned})
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  printManifest(plan, { trucks, drivers, partners, locations, settings })
+                }
+              >
+                <Printer size={16} /> {t('doc.manifest')}
+              </Button>
+            </>
           ) : undefined
         }
       />

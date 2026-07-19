@@ -423,6 +423,11 @@ const en = {
     manifest: 'DISPATCH MANIFEST',
     preparedBy: 'Prepared By',
     approvedBy: 'Approved By',
+    dispatchConfirm: 'DISPATCH CONFIRMATION',
+    dispatchNote: 'The trips below are released for delivery. A signature confirms the day\'s dispatch.',
+    destinations: 'Destinations',
+    dispatchedBy: 'Dispatched By',
+    acknowledgedBy: 'Acknowledged',
   },
   roles: {
     label: 'Access Role',
@@ -467,6 +472,9 @@ const en = {
     logIncident: 'Log incident',
     failedIncident: 'Failed delivery — {{loc}}',
     incidentLogged: 'Incident logged for {{plate}}',
+    dispatchAll: 'Dispatch all',
+    dispatchedN: 'Dispatched {{n}} trips — confirmation ready',
+    dispatchNoneLeft: 'No planned trips left to dispatch',
   },
   pod: {
     title: 'Proof of Delivery',
@@ -1033,6 +1041,11 @@ const th: typeof en = {
     manifest: 'ใบจ่ายงานเดินรถ',
     preparedBy: 'ผู้จัดทำ',
     approvedBy: 'ผู้อนุมัติ',
+    dispatchConfirm: 'ใบยืนยันการจ่ายงานประจำวัน',
+    dispatchNote: 'เที่ยวด้านล่างถูกจ่ายงานเพื่อจัดส่งแล้ว · การลงนามคือการยืนยันการจ่ายงานประจำวัน',
+    destinations: 'ปลายทาง',
+    dispatchedBy: 'ผู้จ่ายงาน',
+    acknowledgedBy: 'ผู้รับทราบ',
   },
   roles: {
     label: 'สิทธิ์การเข้าถึง',
@@ -1077,6 +1090,9 @@ const th: typeof en = {
     logIncident: 'แจ้งเหตุ',
     failedIncident: 'ส่งไม่สำเร็จ — {{loc}}',
     incidentLogged: 'บันทึกเหตุการณ์ของ {{plate}} แล้ว',
+    dispatchAll: 'จ่ายงานทั้งหมด',
+    dispatchedN: 'จ่ายงาน {{n}} เที่ยว — เอกสารยืนยันพร้อมพิมพ์',
+    dispatchNoneLeft: 'ไม่มีเที่ยวที่รอจ่ายงานแล้ว',
   },
   pod: {
     title: 'หลักฐานการส่งมอบ',

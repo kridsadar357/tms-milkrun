@@ -117,6 +117,8 @@ export interface TmsState {
   deleteScenario: (id: string) => void
   loadScenario: (id: string) => void
   updateRouteStatus: (routeId: string, status: TripStatus) => void
+  /** Release every still-planned trip at once; returns how many were dispatched. */
+  dispatchAllPlanned: () => number
   patchRoute: (routeId: string, patch: Partial<PlannedRoute>) => void
   updatePlanRoutes: (routes: PlannedRoute[], unassignedLocationIds?: string[]) => void
   createBillingsFromPlan: () => number
@@ -308,6 +310,30 @@ export const useTms = create<TmsState>()((set, get) => ({
               }
             : {},
         ),
+
+      dispatchAllPlanned: (): number => {
+        const plan = get().plan
+        if (!plan) return 0
+        const planned = plan.routes.filter((r) => (r.status ?? 'planned') === 'planned')
+        if (planned.length === 0) return 0
+        const now = new Date().toTimeString().slice(0, 5)
+        set((s) =>
+          s.plan
+            ? {
+                plan: {
+                  ...s.plan,
+                  routes: s.plan.routes.map((r) =>
+                    (r.status ?? 'planned') === 'planned'
+                      ? { ...r, status: 'dispatched' as const, startTime: r.startTime || now }
+                      : r,
+                  ),
+                },
+              }
+            : {},
+        )
+        get().logAudit('status', 'plan', `dispatched ${planned.length} trips`)
+        return planned.length
+      },
 
       /**
        * Roll the current plan into one billing record per transport partner.

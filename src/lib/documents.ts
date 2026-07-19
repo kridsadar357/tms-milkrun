@@ -252,3 +252,68 @@ export function printManifest(plan: PlanResult, ctx: ManifestCtx) {
 
   openPrintDoc(t('doc.manifest'), inner)
 }
+
+/* -------------------- Daily Dispatch Confirmation -------------------- */
+
+/** The day's released trips with a sign-off — proof that work was dispatched. */
+export function printDispatchConfirmation(plan: PlanResult, ctx: ManifestCtx) {
+  const t = i18n.t.bind(i18n)
+  const { settings: s } = ctx
+  const truckById = new Map(ctx.trucks.map((x) => [x.id, x]))
+  const partnerById = new Map(ctx.partners.map((x) => [x.id, x]))
+  const driverByTruck = new Map(ctx.drivers.filter((d) => d.truckId).map((d) => [d.truckId as string, d]))
+  const locName = (id: string) => {
+    const l = ctx.locations.find((x) => x.id === id)
+    return l ? (isTh() ? l.nameTh || l.name : l.name) : id
+  }
+
+  // Only trips actually released (dispatched or beyond) — the confirmed work.
+  const released = plan.routes.filter((r) => (r.status ?? 'planned') !== 'planned')
+  const list = released.length ? released : plan.routes
+
+  let tStops = 0, tKm = 0
+  const rows = list
+    .map((r, i) => {
+      const truck = truckById.get(r.truckId)
+      const partner = truck ? partnerById.get(truck.partnerId) : undefined
+      const driver = driverByTruck.get(r.truckId)
+      tStops += r.stops.length; tKm += r.distanceKm
+      const dests = r.stops.map((st) => esc(locName(st.locationId))).join(' · ')
+      return `<tr>
+        <td class="c">${i + 1}</td>
+        <td><b>${esc(truck?.plateNumber ?? r.truckId)}</b><br><span class="muted">${t('planner.round')} ${r.round}</span></td>
+        <td>${esc(driver ? (isTh() ? driver.nameTh || driver.name : driver.name) : '—')}<br><span class="muted">${esc(partner?.name ?? '')}</span></td>
+        <td class="c">${esc(r.startTime || '08:00')}</td>
+        <td class="c">${r.stops.length}</td>
+        <td class="muted">${dests}</td>
+      </tr>`
+    })
+    .join('')
+
+  const today = new Date().toISOString().slice(0, 10)
+  const inner = `${letterhead(s)}
+      <div class="doc-title">
+        <h1>${t('doc.dispatchConfirm')}</h1>
+        <div class="sub">${dt(today)}</div>
+        <div class="muted">${esc(s.depotName)}</div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="box"><b>${list.length}</b> ${t('costs.routesCount')} · <b>${tStops}</b> ${t('planner.stops')}<br>
+        <span class="muted">${money(tKm)} ${t('common.km')}</span></div>
+      <div class="box">${t('doc.dispatchNote')}</div>
+    </div>
+    <table>
+      <thead><tr>
+        <th class="c">#</th><th>${t('trucks.title')}</th>
+        <th>${t('trucks.driver')} / ${t('costs.partner')}</th>
+        <th class="c">${t('ops.startTime')}</th>
+        <th class="c">${t('planner.stops')}</th>
+        <th>${t('doc.destinations')}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="sign"><div>${t('doc.dispatchedBy')}</div><div>${t('doc.acknowledgedBy')}</div></div>`
+
+  openPrintDoc(t('doc.dispatchConfirm'), inner)
+}
