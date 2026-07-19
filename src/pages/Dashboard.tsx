@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import {
-  Banknote, Boxes, Factory, Gauge, Leaf, PackageCheck, Recycle, Route as RouteIcon,
-  Ruler, Timer, TriangleAlert, Truck as TruckIcon, Users, Warehouse,
+  ArrowRight, Banknote, Boxes, Check, Factory, Gauge, Leaf, PackageCheck, Recycle, Route as RouteIcon,
+  Ruler, Sunrise, Timer, TriangleAlert, Truck as TruckIcon, Users, Warehouse,
 } from 'lucide-react'
 import { billingAmounts, useTms } from '../store'
 import { estimateCo2Kg } from '../types'
@@ -14,7 +14,7 @@ import type { ReactNode } from 'react'
 
 const WORKDAYS = 26
 
-export default function Dashboard() {
+export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, i18n } = useTranslation()
   const { plan, trucks, locations, partners, drivers, billings, pods, incidents, products, audit, settings } = useTms()
   const th = i18n.language === 'th'
@@ -103,12 +103,58 @@ export default function Dashboard() {
   const openBillings = billings.filter((b) => b.status !== 'paid')
   const outstanding = openBillings.reduce((s, b) => s + billingAmounts(b).netPayable, 0)
 
+  // Start-of-day checklist — real state drives each step.
+  const podIds = new Set(pods.map((p) => p.id))
+  const dispatched = routes.filter((r) => (r.status ?? 'planned') !== 'planned').length
+  const stopTotal = routes.reduce((n, r) => n + r.stops.length, 0)
+  const podRecorded = routes.reduce((n, r) => n + r.stops.filter((x) => podIds.has(`${r.id}:${x.locationId}`)).length, 0)
+  const sod = [
+    { key: 'plan', done: hasPlan, page: 'planner', count: hasPlan ? `${routes.length} ${t('costs.routesCount').toLowerCase()}` : '' },
+    { key: 'dispatch', done: hasPlan && dispatched === routes.length, page: 'operations', count: hasPlan ? `${dispatched}/${routes.length}` : '' },
+    { key: 'deliver', done: stopTotal > 0 && podRecorded === stopTotal, page: 'operations', count: stopTotal > 0 ? `${podRecorded}/${stopTotal}` : '' },
+    { key: 'bill', done: billings.length > 0, page: 'payments', count: billings.length > 0 ? `${billings.length}` : '' },
+  ]
+  const sodDone = sod.filter((s) => s.done).length
+  const nextStep = sod.find((s) => !s.done)
+
   const heroPlanned = hasPlan
     ? `${fmt(totalCost)} ${t('common.baht')}`
     : demandM3 > 0 ? `${fmt(demandM3)} ${t('common.m3')}` : '—'
 
   return (
     <div className="flex flex-col gap-4 pb-2">
+      {/* ---------- start-of-day guide ---------- */}
+      <Panel className="p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Sunrise size={18} className="text-amber-500" />
+          <h2 className="font-semibold text-slate-900">{t('dashboard.sodTitle')}</h2>
+          <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${sodDone === 4 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{sodDone}/4</span>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          {sodDone === 4 ? t('dashboard.sodAllDone') : nextStep ? t('dashboard.sodNext', { step: t(`dashboard.sod.${nextStep.key}`) }) : ''}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {sod.map((step, i) => {
+            const isNext = nextStep?.key === step.key
+            return (
+              <button key={step.key} onClick={() => onNavigate?.(step.page)}
+                className={`text-left rounded-xl border p-3 transition cursor-pointer flex items-start gap-3 ${step.done ? 'bg-emerald-50/60 border-emerald-200' : isNext ? 'bg-brand-50 border-brand-300 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                <span className={`mt-0.5 flex items-center justify-center w-6 h-6 rounded-full text-xs shrink-0 ${step.done ? 'bg-emerald-500 text-white' : isNext ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                  {step.done ? <Check size={14} /> : i + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 text-sm font-medium text-slate-800">
+                    {t(`dashboard.sod.${step.key}`)}
+                    {isNext && <ArrowRight size={13} className="text-brand-500" />}
+                  </span>
+                  <span className="block text-[11px] text-slate-400 mt-0.5 truncate">{step.count || t(`dashboard.sodHint.${step.key}`)}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </Panel>
+
       {/* ---------- hero KPI band ---------- */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Hero primary icon={<Banknote size={18} />} label={hasPlan ? t('dashboard.kpiCost') : t('dashboard.dailyDemand')}

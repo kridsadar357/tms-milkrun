@@ -112,6 +112,11 @@ const en = {
     routeLoadNote: 'Weight & volume utilization per truck', deliveries: 'Deliveries',
     incidents: 'Incidents', high: 'high', billing: 'Billing', outstanding: 'outstanding',
     allSettled: 'all settled', products: 'Products', globalDepot: 'Global depot',
+    sodTitle: 'Start of day',
+    sodAllDone: "You're all caught up — every step is done. 🎉",
+    sodNext: 'Next: {{step}}',
+    sod: { plan: "Plan today's routes", dispatch: 'Dispatch & print sheets', deliver: 'Record deliveries (POD)', bill: 'Create billing' },
+    sodHint: { plan: 'Run Auto Route', dispatch: 'Mark trips dispatched', deliver: 'Capture proof of delivery', bill: 'Invoice the transporter' },
   },
   map: {
     streets: 'Streets',
@@ -707,6 +712,11 @@ const th: typeof en = {
     routeLoadNote: 'ยูทิไลเซชันน้ำหนัก & ปริมาตรต่อคัน', deliveries: 'การส่งมอบ',
     incidents: 'เหตุการณ์', high: 'รุนแรง', billing: 'วางบิล', outstanding: 'ค้างชำระ',
     allSettled: 'ชำระครบ', products: 'สินค้า', globalDepot: 'depot กลาง',
+    sodTitle: 'เริ่มงานวันนี้',
+    sodAllDone: 'ทำครบทุกขั้นตอนแล้ว 🎉',
+    sodNext: 'ถัดไป: {{step}}',
+    sod: { plan: 'วางแผนเส้นทางวันนี้', dispatch: 'สั่งวิ่ง & พิมพ์ใบขับรถ', deliver: 'บันทึกการส่งมอบ (POD)', bill: 'วางบิล' },
+    sodHint: { plan: 'กด Auto Route', dispatch: 'อัปเดตสถานะเป็น dispatched', deliver: 'บันทึกหลักฐานการส่ง', bill: 'ออกใบแจ้งหนี้ผู้ขนส่ง' },
   },
   map: {
     streets: 'ถนน',
