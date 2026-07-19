@@ -12,7 +12,10 @@
  * Distances use haversine × 1.3; the Planner can re-snap to Mapbox roads after.
  */
 
-import type { DeliveryLocation, OptimizeObjective, PlannedRoute, PlanResult, RouteStop, Truck } from '../types'
+import type {
+  DeliveryLocation, OptimizeObjective, PlannedRoute, PlanResult, RateCard, RouteStop,
+  TransportPartner, Truck,
+} from '../types'
 import { roadKm, type LatLng } from './geo'
 
 /**
@@ -60,6 +63,13 @@ export interface PlanInput {
   distanceMatrix?: DistanceMatrix
   /** Shift to plan: 'night' uses each stop's night pickup window. Default 'day'. */
   shift?: 'day' | 'night'
+  /**
+   * Transport partners (with rate cards). When supplied, the 'cost' objective
+   * minimizes the full rate-card cost (labor by duration, fuel, allowances,
+   * drop fees, per-day fixed cost, admin) instead of the fixed+per-km proxy —
+   * which favors fewer, fuller trucks. Omit to keep the lightweight proxy.
+   */
+  partners?: TransportPartner[]
 }
 
 export type UnassignedReason = 'capacity' | 'window' | 'fleet'
@@ -116,6 +126,10 @@ const minToHm = (min: number) => {
 let pinnedTruck = new Map<string, string>()
 // Which shift the current planRoutes run uses — picks the night window when set.
 let planShift: 'day' | 'night' = 'day'
+// Cost-model context for the 'cost' objective (set per planRoutes run).
+let planSpeed = 45
+let planStartMin = 480
+let cardOf: ((t: Truck) => RateCard | undefined) | null = null
 const winStart = (l: DeliveryLocation) => {
   const s = planShift === 'night' ? (l.windowStartNight ?? l.windowStart) : l.windowStart
   return s ? hmToMin(s) : null
@@ -161,8 +175,18 @@ export function planRoutes({
   objective = 'cost',
   distanceMatrix,
   shift = 'day',
+  partners,
 }: PlanInput): PlanResult {
   planShift = shift
+  planSpeed = avgSpeedKmh
+  planStartMin = hmToMin(planStartTime)
+  // When partners (rate cards) are supplied, cost the full rate card per truck.
+  if (partners && partners.length) {
+    const partnerById = new Map(partners.map((p) => [p.id, p]))
+    cardOf = (t) => partnerById.get(t.partnerId)?.costProfile?.[t.type]
+  } else {
+    cardOf = null
+  }
   pinnedTruck = new Map(locations.filter((l) => l.pinnedTruckId).map((l) => [l.id, l.pinnedTruckId as string]))
   // Route every distance/time query through the real Mapbox matrix when provided.
   if (distanceMatrix) {
@@ -192,6 +216,7 @@ export function planRoutes({
     matrixDist = null
     matrixDur = null
     planShift = 'day'
+    cardOf = null
     pinnedTruck = new Map()
   }
 }
@@ -391,10 +416,43 @@ function bestInsertion(
   return best
 }
 
+/** Loop duration (min) for a stop sequence — travel + service + window waits. */
+function routeDurationMin(locs: DeliveryLocation[], depot: LatLng): number {
+  let clock = planStartMin
+  let prev: LatLng = depot
+  for (const loc of locs) {
+    let arrive = clock + travelMin(prev, loc, planSpeed)
+    const ws = winStart(loc)
+    if (ws != null && arrive < ws) arrive = ws
+    clock = arrive + loc.serviceMinutes
+    prev = loc
+  }
+  return clock + travelMin(prev, depot, planSpeed) - planStartMin
+}
+
+/** Full rate-card cost of a route (mirrors cost.ts routeCostBreakdown). */
+function rateCardCost(truck: Truck, locs: DeliveryLocation[], depot: LatLng, distKm: number): number {
+  const card = cardOf?.(truck)
+  const rounds = Math.max(1, ...locs.map((l) => l.roundsPerDay ?? 1))
+  if (!card) return rounds * truck.fixedCostPerRound + rounds * truck.costPerKm * distKm
+  const laborPerHr = planShift === 'night' ? (card.nightLaborPerHr ?? card.laborPerHr) : card.laborPerHr
+  const otPerHr = planShift === 'night' ? (card.nightOtPerHr ?? card.otPerHr) : card.otPerHr
+  const fuelKmPerL = planShift === 'night' ? (card.nightFuelKmPerL ?? card.fuelKmPerL) : card.fuelKmPerL
+  const hours = routeDurationMin(locs, depot) / 60
+  const labor = Math.min(hours, 8) * laborPerHr + Math.max(0, hours - 8) * otPerHr
+  const fuel = fuelKmPerL > 0 ? (distKm / fuelKmPerL) * card.fuelRatePerL : 0
+  const variableTrip = fuel + distKm * card.allowancePerKm + locs.length * card.dropCost
+  const fixedTrip = labor + card.tripSafety
+  const m = 1 + card.adminPct
+  return (rounds * fixedTrip + card.otherPerDay) * m + rounds * variableTrip * m
+}
+
 /**
  * Objective score of one route (lower is better; 0 if empty). What the solver
  * minimizes depends on the chosen objective:
- *  - 'cost'     — fixed cost/round + cost/km × road distance (cheapest ฿ delivery)
+ *  - 'cost'     — full rate-card ฿ when partners are supplied (labor by duration,
+ *                 fuel, allowances, drops, per-day fixed, admin); else the
+ *                 lightweight fixed/round + cost/km × distance proxy
  *  - 'distance' — total road distance only (fewest km, cost-agnostic)
  *  - 'balanced' — cost, penalized for high utilization so load spreads evenly
  */
@@ -402,7 +460,9 @@ const routeScore = (truck: Truck, locs: DeliveryLocation[], depot: LatLng, obj: 
   if (locs.length === 0) return 0
   const dist = routeDist(locs, depot)
   if (obj === 'distance') return dist
-  const cost = truck.fixedCostPerRound + truck.costPerKm * dist
+  const cost = cardOf
+    ? rateCardCost(truck, locs, depot, dist)
+    : truck.fixedCostPerRound + truck.costPerKm * dist
   if (obj === 'cost') return cost
   const util = Math.max(loadM3(locs) / truck.capacityM3, loadKg(locs) / truck.capacityKg)
   return cost * (1 + 0.6 * util * util) // balanced: discourage piling onto one truck

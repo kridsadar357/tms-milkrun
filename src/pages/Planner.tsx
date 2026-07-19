@@ -199,6 +199,7 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
       objective: settings.optimizeObjective,
       distanceMatrix,
       shift: settings.shift,
+      partners,
     }
     const raw = milkrun ? planMilkrun(args) : planRoutes(args)
     const result = { ...raw, routes: priceRoutes(raw.routes) }
