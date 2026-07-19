@@ -2,16 +2,22 @@ import { Fragment, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowDown, ArrowUp, Camera, CheckCircle2, ChevronDown, ChevronRight, ChevronsUpDown,
-  Flag, Info, Navigation, Printer, RotateCcw, Send,
+  Flag, Info, Navigation, Printer, RotateCcw, Send, TriangleAlert,
 } from 'lucide-react'
-import { useTms } from '../store'
+import { newId, useTms } from '../store'
 import { printRouteSheet } from '../lib/routeSheet'
 import { printManifest } from '../lib/documents'
 import { ROUTE_COLORS } from '../components/MapView'
 import {
   Badge, Button, Card, Field, Modal, PageHeader, inputClass,
 } from '../components/ui'
-import { podDelayMinutes, type PlannedRoute, type PodRecord, type PodStatus, type TripStatus } from '../types'
+import {
+  podDelayMinutes,
+  type Incident, type IncidentSeverity, type IncidentType, type PlannedRoute, type PodRecord, type PodStatus, type TripStatus,
+} from '../types'
+
+const INCIDENT_TYPES: IncidentType[] = ['breakdown', 'delay', 'accident', 'damage', 'other']
+const INCIDENT_SEVERITIES: IncidentSeverity[] = ['low', 'medium', 'high']
 
 const STATUS_TONE: Record<TripStatus, 'slate' | 'blue' | 'amber' | 'green'> = {
   planned: 'slate', dispatched: 'blue', 'in-transit': 'amber', completed: 'green',
@@ -30,7 +36,8 @@ type SortKey = 'status' | 'plate' | 'driver' | 'departure' | 'progress' | 'ontim
 
 export default function Operations() {
   const { t, i18n } = useTranslation()
-  const { plan, trucks, partners, drivers, locations, pods, settings, patchRoute, updateRouteStatus, upsertPod } = useTms()
+  const { plan, trucks, partners, drivers, locations, pods, incidents, settings,
+    patchRoute, updateRouteStatus, upsertPod, upsertIncident, deleteIncident } = useTms()
 
   const locById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations])
   const truckById = useMemo(() => new Map(trucks.map((tr) => [tr.id, tr])), [trucks])
@@ -42,6 +49,8 @@ export default function Operations() {
   const podById = useMemo(() => new Map(pods.map((p) => [p.id, p])), [pods])
 
   const [podEdit, setPodEdit] = useState<{ route: PlannedRoute; locationId: string } | null>(null)
+  const [incidentEdit, setIncidentEdit] = useState<{ route: PlannedRoute } | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const [filter, setFilter] = useState<TripStatus | 'all'>('all')
   // Stop lists collapse per route; active trips (dispatched / in-transit) open by default.
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({})
@@ -273,6 +282,9 @@ export default function Operations() {
                               <RotateCcw size={14} />
                             </Button>
                           )}
+                          <Button variant="ghost" className="!px-1.5 !py-1" title={t('ops.logIncident')} aria-label={t('ops.logIncident')} onClick={() => setIncidentEdit({ route })}>
+                            <TriangleAlert size={14} className="text-amber-500" />
+                          </Button>
                           <Button variant="ghost" className="!px-1.5 !py-1" title={t('ops.routeSheet')} aria-label={t('ops.routeSheet')} onClick={() => printRouteSheet({ route, truck, driver, partner, depotName: settings.depotName, locById })}>
                             <Printer size={14} />
                           </Button>
@@ -358,11 +370,85 @@ export default function Operations() {
           onClose={() => setPodEdit(null)}
           onSave={(p) => {
             upsertPod(p)
+            // A failed delivery auto-logs an incident (kept in sync by a
+            // deterministic id — reverting the POD clears it again).
+            const r = podEdit.route
+            const incId = `podfail:${r.id}:${podEdit.locationId}`
+            if (p.status === 'failed') {
+              upsertIncident({
+                id: incId,
+                date: new Date().toISOString().slice(0, 10),
+                type: 'other', severity: 'medium',
+                truckId: r.truckId, routeId: r.id,
+                description: t('ops.failedIncident', { loc: locName(podEdit.locationId) }),
+                resolved: false,
+              })
+            } else if (incidents.some((i) => i.id === incId)) {
+              deleteIncident(incId)
+            }
             setPodEdit(null)
           }}
         />
       )}
+
+      {incidentEdit && (
+        <IncidentModal
+          route={incidentEdit.route}
+          plate={truckById.get(incidentEdit.route.truckId)?.plateNumber ?? incidentEdit.route.truckId}
+          onClose={() => setIncidentEdit(null)}
+          onSave={(inc) => {
+            upsertIncident(inc)
+            setIncidentEdit(null)
+            setToast(t('ops.incidentLogged', { plate: truckById.get(inc.truckId ?? '')?.plateNumber ?? '' }))
+            setTimeout(() => setToast(null), 3000)
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-slate-900 text-white text-sm px-4 py-2.5 shadow-lg flex items-center gap-2">
+          <TriangleAlert size={15} className="text-amber-400" /> {toast}
+        </div>
+      )}
     </div>
+  )
+}
+
+function IncidentModal({ route, plate, onClose, onSave }: {
+  route: PlannedRoute; plate: string; onClose: () => void; onSave: (i: Incident) => void
+}) {
+  const { t } = useTranslation()
+  const [type, setType] = useState<IncidentType>('delay')
+  const [severity, setSeverity] = useState<IncidentSeverity>('medium')
+  const [description, setDescription] = useState('')
+  return (
+    <Modal title={`${t('ops.logIncident')} — ${plate} · ${t('planner.round')} ${route.round}`} onClose={onClose}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label={t('incidents.type')}>
+          <select className={inputClass} value={type} onChange={(e) => setType(e.target.value as IncidentType)}>
+            {INCIDENT_TYPES.map((ty) => <option key={ty} value={ty}>{t(`incidents.types.${ty}`)}</option>)}
+          </select>
+        </Field>
+        <Field label={t('incidents.severity')}>
+          <select className={inputClass} value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)}>
+            {INCIDENT_SEVERITIES.map((sv) => <option key={sv} value={sv}>{t(`incidents.severities.${sv}`)}</option>)}
+          </select>
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label={t('incidents.description')}>
+            <input className={inputClass} value={description} autoFocus onChange={(e) => setDescription(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-6">
+        <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+        <Button onClick={() => onSave({
+          id: newId(), date: new Date().toISOString().slice(0, 10),
+          type, severity, truckId: route.truckId, routeId: route.id,
+          description: description.trim(), resolved: false,
+        })}>{t('common.save')}</Button>
+      </div>
+    </Modal>
   )
 }
 

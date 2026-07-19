@@ -18,16 +18,21 @@ const todayIso = () => new Date().toISOString().slice(0, 10)
 
 const emptyForm = {
   date: '', type: 'breakdown' as IncidentType, severity: 'medium' as IncidentSeverity,
-  truckId: '', description: '', resolved: false,
+  truckId: '', routeId: '', description: '', resolved: false,
 }
 
 export default function Incidents() {
   const { t } = useTranslation()
-  const { incidents, trucks, upsertIncident, deleteIncident } = useTms()
+  const { incidents, trucks, plan, upsertIncident, deleteIncident } = useTms()
   const [editing, setEditing] = useState<Incident | 'new' | null>(null)
   const [form, setForm] = useState(emptyForm)
 
+  const routes = plan?.routes ?? []
   const plate = (id: string | null) => (id ? trucks.find((tr) => tr.id === id)?.plateNumber ?? '—' : '—')
+  const routeLabel = (id: string | null) => {
+    const r = id ? routes.find((x) => x.id === id) : null
+    return r ? `${plate(r.truckId)} · ${t('planner.round')} ${r.round}` : '—'
+  }
 
   const open = (inc: Incident | 'new') => {
     setForm(
@@ -35,10 +40,17 @@ export default function Incidents() {
         ? { ...emptyForm, date: todayIso() }
         : {
             date: inc.date, type: inc.type, severity: inc.severity,
-            truckId: inc.truckId ?? '', description: inc.description, resolved: inc.resolved,
+            truckId: inc.truckId ?? '', routeId: inc.routeId ?? '',
+            description: inc.description, resolved: inc.resolved,
           },
     )
     setEditing(inc)
+  }
+
+  // Selecting a trip auto-fills the truck it runs on.
+  const pickRoute = (routeId: string) => {
+    const r = routes.find((x) => x.id === routeId)
+    setForm((f) => ({ ...f, routeId, truckId: r ? r.truckId : f.truckId }))
   }
 
   const submit = () => {
@@ -48,7 +60,7 @@ export default function Incidents() {
       type: form.type,
       severity: form.severity,
       truckId: form.truckId || null,
-      routeId: editing !== 'new' && editing ? editing.routeId : null,
+      routeId: form.routeId || null,
       description: form.description.trim(),
       resolved: form.resolved,
     })
@@ -99,7 +111,10 @@ export default function Incidents() {
               <td className="px-4 py-3">
                 <Badge tone={SEV_TONE[inc.severity]}>{t(`incidents.severities.${inc.severity}`)}</Badge>
               </td>
-              <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{plate(inc.truckId)}</td>
+              <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                {plate(inc.truckId)}
+                {inc.routeId && <span className="ml-1.5 text-xs text-slate-400">· {t('planner.round')} {routes.find((r) => r.id === inc.routeId)?.round ?? '?'}</span>}
+              </td>
               <td className="px-4 py-3 text-slate-600 max-w-md">{inc.description}</td>
               <td className="px-4 py-3">
                 <Badge tone={inc.resolved ? 'green' : 'amber'}>
@@ -133,8 +148,16 @@ export default function Incidents() {
             <Field label={t('incidents.date')}>
               <input type="date" className={inputClass} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </Field>
+            {routes.length > 0 && (
+              <Field label={t('incidents.route')}>
+                <select className={inputClass} value={form.routeId} onChange={(e) => pickRoute(e.target.value)}>
+                  <option value="">{t('incidents.none')}</option>
+                  {routes.map((r) => <option key={r.id} value={r.id}>{routeLabel(r.id)}</option>)}
+                </select>
+              </Field>
+            )}
             <Field label={t('incidents.truck')}>
-              <select className={inputClass} value={form.truckId} onChange={(e) => setForm({ ...form, truckId: e.target.value })}>
+              <select className={inputClass} value={form.truckId} onChange={(e) => setForm({ ...form, truckId: e.target.value, routeId: '' })}>
                 <option value="">{t('incidents.none')}</option>
                 {trucks.map((tr) => <option key={tr.id} value={tr.id}>{tr.plateNumber}</option>)}
               </select>

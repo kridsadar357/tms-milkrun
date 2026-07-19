@@ -191,16 +191,24 @@ export default function Analytics() {
         {/* 4. Returnable packaging */}
         <Section icon={<Recycle size={16} />} title={t('analytics.returnable')}>
           <p className="text-xs text-slate-500 mb-3">{t('analytics.returnableHint')}</p>
-          <div className="flex items-end gap-3 mb-3">
-            <span className="text-3xl font-semibold text-slate-900 tabular-nums">{s.returnablePct}%</span>
-            <span className="text-sm text-slate-500 pb-1">{t('analytics.returnableShare')}</span>
-          </div>
-          <Legend items={[[SERIES_1, t('analytics.returnableSkus')], [SERIES_2, t('analytics.oneWay')]]} />
-          <div className="space-y-2 mt-2">
-            <PairRow label={t('analytics.wooden')} a={s.palletsWooden} b={0} max={Math.max(1, ...[s.palletsWooden, s.palletsPlastic, s.palletsNone])} />
-            <PairRow label={t('analytics.plastic')} a={s.palletsPlastic} b={0} max={Math.max(1, ...[s.palletsWooden, s.palletsPlastic, s.palletsNone])} />
-            <PairRow label={t('analytics.oneWay')} a={0} b={s.palletsNone} max={Math.max(1, ...[s.palletsWooden, s.palletsPlastic, s.palletsNone])} />
-          </div>
+          {s.returnableSkus + s.oneWaySkus === 0 ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2.5">
+              {t('analytics.returnableEmpty')}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-end gap-3 mb-3">
+                <span className="text-3xl font-semibold text-slate-900 tabular-nums">{s.returnablePct}%</span>
+                <span className="text-sm text-slate-500 pb-1">{t('analytics.returnableShare')}</span>
+              </div>
+              <Legend items={[[SERIES_1, t('analytics.returnableSkus')], [SERIES_2, t('analytics.oneWay')]]} />
+              <div className="space-y-2 mt-2">
+                <PairRow label={t('analytics.wooden')} a={s.palletsWooden} b={0} max={Math.max(1, ...[s.palletsWooden, s.palletsPlastic, s.palletsNone])} />
+                <PairRow label={t('analytics.plastic')} a={s.palletsPlastic} b={0} max={Math.max(1, ...[s.palletsWooden, s.palletsPlastic, s.palletsNone])} />
+                <PairRow label={t('analytics.oneWay')} a={0} b={s.palletsNone} max={Math.max(1, ...[s.palletsWooden, s.palletsPlastic, s.palletsNone])} />
+              </div>
+            </>
+          )}
         </Section>
       </div>
 
