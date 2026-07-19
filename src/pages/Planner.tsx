@@ -307,7 +307,9 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
   const canPlan = activeTrucks.length > 0 && activeLocations.length > 0
 
   return (
-    <div className="relative h-full">
+    // Mobile: map on top, controls stacked below (no overlap with map tools).
+    // Desktop (lg+): full-bleed map with the control panel floating over it.
+    <div className="h-full flex flex-col lg:block lg:relative">
       {/* Full-bleed map; all map tools sit on the left / bottom-left. */}
       <MapView
         token={mapToken}
@@ -319,11 +321,11 @@ export default function Planner({ onNavigate }: { onNavigate?: (page: string) =>
           const truck = truckById.get(r.truckId)
           return `${truck?.plateNumber ?? r.truckId} · ${t('planner.round')} ${r.round} · ${r.distanceKm} ${t('common.km')}`
         }}
-        className="h-full w-full rounded-xl border border-slate-200"
+        className="h-[42vh] w-full shrink-0 rounded-xl border border-slate-200 lg:h-full"
       />
 
-      {/* Floating control panel — right side, clear of the map's own controls. */}
-      <div className="absolute top-2 right-2 bottom-2 w-[380px] max-w-[calc(100%-1rem)] flex flex-col gap-2 z-20">
+      {/* Control panel — in-flow below the map on mobile, floating right on desktop. */}
+      <div className="flex flex-col gap-2 flex-1 min-h-0 mt-2 lg:flex-none lg:mt-0 lg:absolute lg:top-2 lg:right-2 lg:bottom-2 lg:w-[380px] lg:max-w-[calc(100%-1rem)] lg:z-20">
         <div className="bg-white/95 backdrop-blur rounded-xl border border-slate-200 shadow-md px-2 py-1.5 flex items-center gap-1">
           <span className="text-sm font-semibold text-slate-800 px-1 mr-auto">{t('planner.title')}</span>
           {plan && (

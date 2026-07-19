@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Banknote, BarChart3, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Moon, Receipt, Route as RouteIcon,
+  Banknote, BarChart3, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Menu, Moon, Receipt, Route as RouteIcon,
   Settings as SettingsIcon, ShieldCheck, Sun, TriangleAlert, Truck as TruckIcon, UserRound, Boxes, Package
 } from 'lucide-react'
 import { initStore, useTms } from './store'
@@ -55,6 +55,7 @@ export default function App() {
   const role = useTms((s) => s.settings.role)
   const [page, setPage] = useState<Page>('dashboard')
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Check for an existing session on load; load the store only once authenticated.
   useEffect(() => {
@@ -107,10 +108,28 @@ export default function App() {
   ]
   const nav = allNav.filter((item) => !item.adminOnly || isAdmin)
 
+  const go = (p: Page) => {
+    setPage(p)
+    setSidebarOpen(false)
+  }
+
   return (
-    <div className="h-full flex">
-      {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+    <div className="h-full flex overflow-hidden">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-30 bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      {/* Sidebar — static on desktop, off-canvas drawer on mobile */}
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 lg:w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col
+          transform transition-transform duration-300 ease-out lg:translate-x-0
+          ${sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}
+      >
         <div className="px-5 py-5 border-b border-slate-800">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center text-white">
@@ -121,7 +140,7 @@ export default function App() {
               <p className="text-[11px] text-slate-400 leading-tight truncate">{t('app.subtitle')}</p>
             </div>
             <div className="ml-auto">
-              <AlertCenter onNavigate={(p) => setPage(p as Page)} />
+              <AlertCenter onNavigate={(p) => go(p as Page)} />
             </div>
           </div>
         </div>
@@ -135,7 +154,7 @@ export default function App() {
                 </p>
               )}
               <button
-                onClick={() => setPage(item.id)}
+                onClick={() => go(item.id)}
                 className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm transition-colors cursor-pointer ${
                   page === item.id
                     ? 'bg-slate-800 text-white border-r-2 border-brand-500'
@@ -176,18 +195,40 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-y-auto">
-        {page === 'planner' ? (
-          <div className="h-full p-2 sm:p-3">
-            <Planner onNavigate={(p) => setPage(p as Page)} />
+      {/* Main column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile top bar */}
+        <header className="lg:hidden flex items-center gap-3 px-4 h-14 shrink-0 bg-slate-900 text-white">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1.5 -ml-1.5 rounded-md hover:bg-slate-800 cursor-pointer"
+            aria-label="Menu"
+          >
+            <Menu size={22} />
+          </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
+              <TruckIcon size={16} />
+            </div>
+            <p className="font-semibold truncate">{t('app.title')}</p>
           </div>
-        ) : page === 'dashboard' ? (
-          <div className="p-6 h-full"><Dashboard onNavigate={(p) => setPage(p as Page)} /></div>
-        ) : (
-          <div className="p-6 h-full">{PAGES[page]()}</div>
-        )}
-      </main>
+          <div className="ml-auto">
+            <AlertCenter onNavigate={(p) => go(p as Page)} />
+          </div>
+        </header>
+
+        <main className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          {page === 'planner' ? (
+            <div className="h-full p-2 sm:p-3">
+              <Planner onNavigate={(p) => go(p as Page)} />
+            </div>
+          ) : page === 'dashboard' ? (
+            <div className="p-4 sm:p-6 h-full"><Dashboard onNavigate={(p) => go(p as Page)} /></div>
+          ) : (
+            <div className="p-4 sm:p-6 h-full">{PAGES[page]()}</div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }

@@ -3,9 +3,9 @@ import { X } from 'lucide-react'
 
 export function PageHeader({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-5">
-      <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-      {actions && <div className="flex gap-2">{actions}</div>}
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-5">
+      <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">{title}</h1>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   )
 }
