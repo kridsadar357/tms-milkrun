@@ -31,8 +31,30 @@ export default function Operations() {
   const podById = useMemo(() => new Map(pods.map((p) => [p.id, p])), [pods])
 
   const [podEdit, setPodEdit] = useState<{ route: PlannedRoute; locationId: string } | null>(null)
+  const [filter, setFilter] = useState<TripStatus | 'all'>('all')
 
-  const routes = plan?.routes ?? []
+  const allRoutes = plan?.routes ?? []
+  const routes = filter === 'all' ? allRoutes : allRoutes.filter((r) => (r.status ?? 'planned') === filter)
+
+  const ops = useMemo(() => {
+    const status: Record<TripStatus, number> = { planned: 0, dispatched: 0, 'in-transit': 0, completed: 0 }
+    let stops = 0, delivered = 0, failed = 0, onTime = 0, late = 0, early = 0
+    for (const r of allRoutes) {
+      status[r.status ?? 'planned']++
+      for (const s of r.stops) {
+        stops++
+        const pod = podById.get(`${r.id}:${s.locationId}`)
+        if (pod?.status === 'delivered') delivered++
+        else if (pod?.status === 'failed') failed++
+        if (pod?.arrival) {
+          const d = podDelayMinutes(r, s.etaMinutes, pod.arrival)
+          if (d != null) { if (d > 5) late++; else if (d < -5) early++; else onTime++ }
+        }
+      }
+    }
+    const recorded = onTime + late + early
+    return { status, stops, delivered, failed, onTime, late, early, recorded }
+  }, [allRoutes, podById])
   const locName = (id: string) => {
     const l = locById.get(id)
     return l ? (i18n.language === 'th' ? l.nameTh || l.name : l.name) : id
@@ -43,7 +65,7 @@ export default function Operations() {
     return `${String(Math.floor((total % 1440) / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
   }
 
-  if (routes.length === 0) {
+  if (allRoutes.length === 0) {
     return (
       <div>
         <PageHeader title={t('ops.title')} />
@@ -71,6 +93,29 @@ export default function Operations() {
           ) : undefined
         }
       />
+
+      {/* Operations overview */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+        <OpsKpi label={t('ops.kpiRoutes')} value={String(allRoutes.length)} sub={`${ops.stops} ${t('planner.stops')}`} />
+        <OpsKpi label={t('ops.onRoad')} value={String(ops.status.dispatched + ops.status['in-transit'])} sub={`${ops.status.dispatched} ${t('planner.statuses.dispatched').toLowerCase()} · ${ops.status['in-transit']} ${t('planner.statuses.in-transit').toLowerCase()}`} tone="amber" />
+        <OpsKpi label={t('planner.statuses.completed')} value={String(ops.status.completed)} sub={`${ops.status.planned} ${t('planner.statuses.planned').toLowerCase()}`} tone="green" />
+        <OpsKpi primary label={t('ops.deliveries')} value={`${ops.delivered}/${ops.stops}`} sub={`${ops.stops > 0 ? Math.round((ops.delivered / ops.stops) * 100) : 0}% ${t('ops.done')}`} />
+        <OpsKpi label={t('ops.onTimeRate')} value={ops.recorded > 0 ? `${Math.round((ops.onTime / ops.recorded) * 100)}%` : '—'} sub={`${ops.onTime}/${ops.recorded} ${t('ops.recorded')}`} tone="green" />
+        <OpsKpi label={t('analytics.late')} value={String(ops.late)} sub={`${ops.early} ${t('analytics.early')} · ${ops.failed} ${t('pod.statuses.failed')}`} tone={ops.late > 0 || ops.failed > 0 ? 'red' : undefined} />
+      </div>
+
+      {/* Status filter */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {(['all', 'planned', 'dispatched', 'in-transit', 'completed'] as const).map((f) => {
+          const n = f === 'all' ? allRoutes.length : ops.status[f]
+          return (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer border transition ${filter === f ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+              {f === 'all' ? t('common.all') : t(`planner.statuses.${f}`)} <span className="tabular-nums opacity-70">({n})</span>
+            </button>
+          )
+        })}
+      </div>
 
       <div className="space-y-4">
         {routes.map((route) => {
@@ -194,6 +239,17 @@ export default function Operations() {
           }}
         />
       )}
+    </div>
+  )
+}
+
+function OpsKpi({ label, value, sub, primary, tone }: { label: string; value: string; sub?: string; primary?: boolean; tone?: 'green' | 'amber' | 'red' }) {
+  const vColor = primary ? 'text-white' : tone === 'green' ? 'text-emerald-600' : tone === 'amber' ? 'text-amber-600' : tone === 'red' ? 'text-rose-600' : 'text-slate-900'
+  return (
+    <div className={`rounded-xl border shadow-sm p-4 ${primary ? 'bg-brand-500 border-brand-500' : 'bg-white border-slate-200'}`}>
+      <div className={`text-xs font-medium mb-2 ${primary ? 'text-white/80' : 'text-slate-500'}`}>{label}</div>
+      <p className={`text-xl font-bold tabular-nums leading-none ${vColor}`}>{value}</p>
+      {sub && <p className={`text-[11px] mt-1.5 truncate ${primary ? 'text-white/70' : 'text-slate-400'}`}>{sub}</p>}
     </div>
   )
 }

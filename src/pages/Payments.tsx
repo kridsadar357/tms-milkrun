@@ -59,6 +59,22 @@ export default function Payments() {
     [billings],
   )
 
+  const ar = useMemo(() => {
+    const byStatus: Record<BillingStatus, { n: number; amt: number }> = {
+      draft: { n: 0, amt: 0 }, approved: { n: 0, amt: 0 }, paid: { n: 0, amt: 0 },
+    }
+    const byPartner = new Map<string, number>()
+    for (const b of billings) {
+      const { netPayable } = billingAmounts(b)
+      byStatus[b.status].n++; byStatus[b.status].amt += netPayable
+      if (b.status !== 'paid') byPartner.set(b.partnerId, (byPartner.get(b.partnerId) ?? 0) + netPayable)
+    }
+    const partners = [...byPartner.entries()]
+      .map(([pid, amt]) => ({ name: partnerById.get(pid)?.name ?? '—', amt }))
+      .sort((a, b) => b.amt - a.amt)
+    return { byStatus, partners, maxPartner: Math.max(1, ...partners.map((p) => p.amt)) }
+  }, [billings, partnerById])
+
   const createFromPlan = () => {
     const n = createBillingsFromPlan()
     setToast(n > 0 ? `${n} ${t('payments.createdN')}` : t('payments.noPlanToBill'))
@@ -133,6 +149,57 @@ export default function Payments() {
         />
         <Kpi icon={<CheckCircle2 size={18} />} label={t('payments.paidThisMonth')} value={`${fmt(totals.paidThisMonth)} ${t('common.baht')}`} />
       </div>
+
+      {billings.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Collection status */}
+          <Card className="p-5">
+            <h2 className="font-semibold text-slate-900 mb-1">{t('payments.collectionStatus')}</h2>
+            <p className="text-xs text-slate-500 mb-4">{t('payments.collectionNote')}</p>
+            {(() => {
+              const total = ar.byStatus.draft.amt + ar.byStatus.approved.amt + ar.byStatus.paid.amt || 1
+              const seg: [BillingStatus, string][] = [['paid', '#1baf7a'], ['approved', '#2a78d6'], ['draft', '#94a3b8']]
+              return (
+                <>
+                  <div className="flex h-5 rounded-lg overflow-hidden mb-4">
+                    {seg.map(([st, c]) => ar.byStatus[st].amt > 0 && (
+                      <div key={st} style={{ width: `${(ar.byStatus[st].amt / total) * 100}%`, background: c }} title={`${t(`payments.statuses.${st}`)} ${fmt(ar.byStatus[st].amt)}`} />
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    {seg.map(([st, c]) => (
+                      <div key={st} className="flex items-center gap-2 text-sm">
+                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: c }} />
+                        <span className="text-slate-600 flex-1">{t(`payments.statuses.${st}`)} <span className="text-slate-400">({ar.byStatus[st].n})</span></span>
+                        <span className="text-slate-800 tabular-nums font-medium">{fmt(ar.byStatus[st].amt)} {t('common.baht')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
+          </Card>
+
+          {/* Outstanding by partner */}
+          <Card className="p-5">
+            <h2 className="font-semibold text-slate-900 mb-1">{t('payments.outstandingByPartner')}</h2>
+            <p className="text-xs text-slate-500 mb-4">{t('payments.outstandingByPartnerNote')}</p>
+            {ar.partners.length ? (
+              <div className="space-y-2.5">
+                {ar.partners.map((p) => (
+                  <div key={p.name} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 text-sm">
+                    <span className="text-slate-700 truncate">{p.name}</span>
+                    <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${(p.amt / ar.maxPartner) * 100}%` }} />
+                    </div>
+                    <span className="text-slate-800 tabular-nums whitespace-nowrap font-medium">{fmt(p.amt)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="py-8 text-center text-sm text-emerald-600">{t('payments.allCollected')}</p>}
+          </Card>
+        </div>
+      )}
 
       <Card>
         <Table
