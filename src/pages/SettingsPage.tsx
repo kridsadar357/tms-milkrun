@@ -1,7 +1,12 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Building2, Check, Fuel, History, LogOut, Moon, ShieldCheck, Sun, Upload } from 'lucide-react'
+import {
+  Building2, Check, Database, Fuel, History, LogOut, MapPin, Moon, ShieldCheck,
+  SlidersHorizontal, Sun, Upload,
+} from 'lucide-react'
 import { useTms } from '../store'
+
+type TabId = 'general' | 'routing' | 'cost' | 'company' | 'activity' | 'data'
 import { validateCoords } from '../lib/geo'
 import { can } from '../lib/permissions'
 import { logout } from '../lib/auth'
@@ -31,6 +36,7 @@ export default function SettingsPage() {
   })
   const [saved, setSaved] = useState(false)
   const [fuelMsg, setFuelMsg] = useState<string | null>(null)
+  const [tab, setTab] = useState<TabId>('general')
 
   const coordCheck = validateCoords(form.depotLat, form.depotLng)
 
@@ -70,11 +76,37 @@ export default function SettingsPage() {
     setTimeout(() => setFuelMsg(null), 3000)
   }
 
+  const allTabs: { id: TabId; label: string; icon: ReactNode; adminOnly?: boolean }[] = [
+    { id: 'general', label: t('settings.tabGeneral'), icon: <SlidersHorizontal size={15} /> },
+    { id: 'routing', label: t('settings.tabRouting'), icon: <MapPin size={15} /> },
+    { id: 'cost', label: t('settings.tabCost'), icon: <Fuel size={15} /> },
+    { id: 'company', label: t('settings.tabCompany'), icon: <Building2 size={15} /> },
+    { id: 'activity', label: t('activity.title'), icon: <History size={15} /> },
+    { id: 'data', label: t('settings.dataMgmt'), icon: <Database size={15} />, adminOnly: true },
+  ]
+  const tabs = allTabs.filter((x) => !x.adminOnly || isAdmin)
+
   return (
-    <div className="max-w-2xl">
+    <div>
       <PageHeader title={t('settings.title')} />
 
-      <Card className="p-5 mb-4 space-y-4">
+      <div className="flex flex-wrap gap-1 border-b border-slate-200 mb-4">
+        {tabs.map((tb) => (
+          <button
+            key={tb.id}
+            onClick={() => setTab(tb.id)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition cursor-pointer ${
+              tab === tb.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tb.icon} {tb.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="max-w-3xl">
+      {tab === 'general' && (
+      <Card className="p-5 space-y-4">
         <Field label={t('settings.language')}>
           <div className="flex gap-2 mt-1">
             <Button
@@ -127,8 +159,10 @@ export default function SettingsPage() {
           </div>
         </Field>
       </Card>
+      )}
 
-      <Card className="p-5 mb-4 space-y-4">
+      {tab === 'routing' && (
+      <Card className="p-5 space-y-4">
         <Field label={t('settings.mapboxToken')} hint={t('settings.mapboxHint')}>
           <input
             className={inputClass}
@@ -188,9 +222,10 @@ export default function SettingsPage() {
           )}
         </div>
       </Card>
+      )}
 
-      {/* Fuel & emissions */}
-      <Card className="p-5 mb-4 space-y-4">
+      {tab === 'cost' && (
+      <Card className="p-5 space-y-4">
         <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
           <Fuel size={16} /> {t('settings.fuel')}
         </h2>
@@ -212,9 +247,10 @@ export default function SettingsPage() {
           {fuelMsg && <span className="text-sm text-emerald-600">{fuelMsg}</span>}
         </div>
       </Card>
+      )}
 
-      {/* Company details for printed documents */}
-      <Card className="p-5 mb-4 space-y-4">
+      {tab === 'company' && (
+      <Card className="p-5 space-y-4">
         <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
           <Building2 size={16} /> {t('settings.company')}
         </h2>
@@ -233,9 +269,10 @@ export default function SettingsPage() {
         </div>
         <Button onClick={save} disabled={!coordCheck.ok}>{t('common.save')}</Button>
       </Card>
+      )}
 
-      {/* Activity log */}
-      <Card className="mb-4">
+      {tab === 'activity' && (
+      <Card>
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
           <History size={16} className="text-slate-400" />
           <h2 className="text-sm font-semibold text-slate-800">{t('activity.title')}</h2>
@@ -259,8 +296,9 @@ export default function SettingsPage() {
           </div>
         )}
       </Card>
+      )}
 
-      {isAdmin && (
+      {tab === 'data' && isAdmin && (
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-800 mb-3">{t('settings.dataMgmt')}</h2>
 
@@ -325,6 +363,7 @@ export default function SettingsPage() {
           </div>
         </Card>
       )}
+      </div>
     </div>
   )
 }
