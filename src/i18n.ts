@@ -460,6 +460,9 @@ const en = {
     onTimeRate: 'On-time rate',
     recorded: 'recorded',
     arrived: 'arrived',
+    crew: 'Driver / Transporter',
+    expandAll: 'Expand all',
+    collapseAll: 'Collapse all',
   },
   pod: {
     title: 'Proof of Delivery',
@@ -1062,6 +1065,9 @@ const th: typeof en = {
     onTimeRate: 'อัตราตรงเวลา',
     recorded: 'บันทึกแล้ว',
     arrived: 'ถึง',
+    crew: 'คนขับ / ผู้ขนส่ง',
+    expandAll: 'ขยายทั้งหมด',
+    collapseAll: 'ยุบทั้งหมด',
   },
   pod: {
     title: 'หลักฐานการส่งมอบ',
