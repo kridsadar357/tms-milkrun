@@ -70,7 +70,7 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title={t('analytics.title')}
         actions={
@@ -133,26 +133,44 @@ export default function Analytics() {
         </div>
       </Section>
 
-      {/* Route lead-time (cycle time per loop) */}
-      <Section icon={<Timer size={16} />} title={t('analytics.leadTimeByRoute')}>
-        <p className="text-xs text-slate-500 mb-3">{t('analytics.leadTimeHint')}</p>
-        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-          {leadTimes.map((r) => {
-            const h = Math.floor(r.min / 60), m = r.min % 60
-            return (
-              <div key={r.id} className="grid grid-cols-[minmax(0,8rem)_1fr_auto] items-center gap-3 text-sm">
-                <span className="text-slate-700 truncate">{r.label} <span className="text-slate-400 text-xs">· {r.stops} {t('planner.stops')}</span></span>
-                <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${(r.min / leadTimes[0].min) * 100}%`, background: r.min > 8 * 60 ? '#e6a100' : SERIES_1 }} />
+      {/* Per-route performance: cycle time + load, side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Section icon={<Timer size={16} />} title={t('analytics.leadTimeByRoute')}>
+          <p className="text-xs text-slate-500 mb-3">{t('analytics.leadTimeHint')}</p>
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {leadTimes.map((r) => {
+              const h = Math.floor(r.min / 60), m = r.min % 60
+              return (
+                <div key={r.id} className="grid grid-cols-[minmax(0,8rem)_1fr_auto] items-center gap-3 text-sm">
+                  <span className="text-slate-700 truncate">{r.label} <span className="text-slate-400 text-xs">· {r.stops} {t('planner.stops')}</span></span>
+                  <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${(r.min / leadTimes[0].min) * 100}%`, background: r.min > 8 * 60 ? '#e6a100' : SERIES_1 }} />
+                  </div>
+                  <span className="text-slate-500 tabular-nums whitespace-nowrap w-16 text-right">{h > 0 ? `${h}h ` : ''}{m}m</span>
                 </div>
-                <span className="text-slate-500 tabular-nums whitespace-nowrap w-16 text-right">{h > 0 ? `${h}h ` : ''}{m}m</span>
-              </div>
-            )
-          })}
-        </div>
-      </Section>
+              )
+            })}
+          </div>
+        </Section>
 
-      {/* 2. Time windows */}
+        {/* Load optimization — m³ + kg fill per route */}
+        <Section icon={<Boxes size={16} />} title={t('analytics.loadOptimization')}>
+          <Legend items={[[SERIES_1, `${t('planner.volume')} (${t('common.m3')})`], [SERIES_2, `${t('planner.weight')} (${t('common.kg')})`]]} />
+          <div className="space-y-2 mt-2 max-h-64 overflow-y-auto pr-1">
+            {s.routeUtil.map((r, i) => (
+              <div key={i} className="grid grid-cols-[minmax(0,9rem)_1fr] items-center gap-3 text-xs">
+                <span className="text-slate-600 truncate">{r.label}</span>
+                <div className="space-y-1">
+                  <Bar pct={r.m3Pct} color={SERIES_1} suffix={`${r.m3Pct}%`} />
+                  <Bar pct={r.kgPct} color={SERIES_2} suffix={`${r.kgPct}%`} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      </div>
+
+      {/* Compliance + packaging */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Section icon={<Clock size={16} />} title={t('analytics.timeWindows')}>
           <p className="text-xs text-slate-500 mb-3">{t('analytics.windowHint')}</p>
@@ -186,23 +204,7 @@ export default function Analytics() {
         </Section>
       </div>
 
-      {/* 3. Load optimization */}
-      <Section icon={<Boxes size={16} />} title={t('analytics.loadOptimization')}>
-        <Legend items={[[SERIES_1, `${t('planner.volume')} (${t('common.m3')})`], [SERIES_2, `${t('planner.weight')} (${t('common.kg')})`]]} />
-        <div className="space-y-2 mt-2">
-          {s.routeUtil.map((r, i) => (
-            <div key={i} className="grid grid-cols-[minmax(0,9rem)_1fr] items-center gap-3 text-xs">
-              <span className="text-slate-600 truncate">{r.label}</span>
-              <div className="space-y-1">
-                <Bar pct={r.m3Pct} color={SERIES_1} suffix={`${r.m3Pct}%`} />
-                <Bar pct={r.kgPct} color={SERIES_2} suffix={`${r.kgPct}%`} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* 5. Flexibility & communication */}
+      {/* Flexibility & communication */}
       <Section icon={<TriangleAlert size={16} />} title={t('analytics.flexComm')}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <MiniStat label={t('analytics.podCompletion')} value={`${s.podCompletionPct}%`} tone="text-emerald-600" big />

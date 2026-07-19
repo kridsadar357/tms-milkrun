@@ -161,10 +161,10 @@ export default function Costs() {
               <Card className="p-5">
                 <h2 className="font-semibold text-slate-900 mb-1">{t('costs.composition')}</h2>
                 <p className="text-xs text-slate-500 mb-4">{t('costs.compositionNote')}</p>
-                <div className="flex h-5 rounded-lg overflow-hidden mb-4">
+                <div className="flex h-5 gap-0.5 mb-4">
                   {COMP.map((c) => {
                     const v = composition[c.key]
-                    return v > 0 ? <div key={c.key} title={`${t('costs.comp.' + c.key)} ฿${fmt(v)}`} style={{ width: `${(v / composition.total) * 100}%`, background: c.color }} /> : null
+                    return v > 0 ? <div key={c.key} className="first:rounded-l-lg last:rounded-r-lg" title={`${t('costs.comp.' + c.key)} ฿${fmt(v)}`} style={{ width: `${(v / composition.total) * 100}%`, background: c.color }} /> : null
                   })}
                 </div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2">
