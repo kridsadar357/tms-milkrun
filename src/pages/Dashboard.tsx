@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import {
   ArrowRight, Banknote, Boxes, Check, Factory, Gauge, Leaf, PackageCheck, Recycle, Route as RouteIcon,
-  Ruler, Sunrise, Timer, TriangleAlert, Truck as TruckIcon, Users, Warehouse,
+  Ruler, Sunrise, Timer, TriangleAlert, Truck as TruckIcon,
 } from 'lucide-react'
 import { billingAmounts, useTms } from '../store'
 import { estimateCo2Kg } from '../types'
@@ -16,7 +16,7 @@ const WORKDAYS = 26
 
 export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, i18n } = useTranslation()
-  const { plan, trucks, locations, partners, drivers, billings, pods, incidents, products, audit, settings } = useTms()
+  const { plan, trucks, locations, partners, billings, pods, incidents, products, audit, settings } = useTms()
   const th = i18n.language === 'th'
   const fmt = (n: number) => n.toLocaleString(th ? 'th-TH' : 'en-US', { maximumFractionDigits: 0 })
   const truckById = useMemo(() => new Map(trucks.map((tr) => [tr.id, tr])), [trucks])
@@ -62,6 +62,9 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
       return { day: d, m3: Math.round(stops.reduce((s, l) => s + l.demandM3, 0) * 10) / 10, count: stops.length }
     })
   }, [suppliers, th])
+  // Weekly bars are only meaningful when suppliers actually differ by weekday;
+  // with daily-delivery data every bar is identical, so we hide the chart.
+  const weeklyVaries = new Set(weekly.map((w) => w.count)).size > 1
 
   /* ---------------- plan-derived (real; empty until Auto Route) ---------------- */
   const routes = plan?.routes.filter((r) => r.stops.length > 0) ?? []
@@ -180,7 +183,8 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
         </Panel>
       )}
 
-      {/* ---------- main analytics grid ---------- */}
+      {/* ---------- cost & efficiency ---------- */}
+      <SectionLabel icon={<Banknote size={13} />}>{t('dashboard.secCost')}</SectionLabel>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Transporter cost ranking */}
         <Panel className="p-5 lg:col-span-2">
@@ -223,7 +227,8 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
         </Panel>
       </div>
 
-      {/* ---------- capacity / plants / weekly ---------- */}
+      {/* ---------- network & demand ---------- */}
+      <SectionLabel icon={<Factory size={13} />}>{t('dashboard.secNetwork')}</SectionLabel>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Capacity vs demand */}
         <Panel className="p-5">
@@ -241,8 +246,8 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
           </div>
         </Panel>
 
-        {/* Inbound by plant (milkrun structure) */}
-        <Panel className="p-5">
+        {/* Inbound by plant (milkrun structure) — widens when the weekly chart is hidden */}
+        <Panel className={`p-5 ${weeklyVaries ? '' : 'lg:col-span-2'}`}>
           <PanelHead icon={<Factory size={15} />} title={t('dashboard.byPlant')} note={t('dashboard.byPlantNote')} />
           <div className="space-y-2 mt-3 max-h-56 overflow-y-auto pr-1">
             {perPlant.length ? perPlant.map((p) => {
@@ -258,25 +263,28 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
           </div>
         </Panel>
 
-        {/* Weekly demand */}
-        <Panel className="p-5">
-          <PanelHead icon={<Ruler size={15} />} title={t('dashboard.weeklyDemand')} note={t('dashboard.weeklyDemandNote')} />
-          <div className="flex items-end justify-between gap-2 h-40 mt-4">
-            {weekly.map((w) => {
-              const max = Math.max(1, ...weekly.map((x) => x.m3))
-              return (
-                <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                  <span className="text-[10px] text-slate-400 tabular-nums">{w.m3 > 0 ? w.m3 : ''}</span>
-                  <div className="w-full rounded-t bg-brand-500/85" style={{ height: `${Math.max(2, (w.m3 / max) * 100)}%` }} />
-                  <span className="text-[11px] text-slate-500">{w.day}</span>
-                </div>
-              )
-            })}
-          </div>
-        </Panel>
+        {/* Weekly demand — only when suppliers actually vary by weekday */}
+        {weeklyVaries && (
+          <Panel className="p-5">
+            <PanelHead icon={<Ruler size={15} />} title={t('dashboard.weeklyDemand')} note={t('dashboard.weeklyDemandNote')} />
+            <div className="flex items-end justify-between gap-2 h-40 mt-4">
+              {weekly.map((w) => {
+                const max = Math.max(1, ...weekly.map((x) => x.m3))
+                return (
+                  <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                    <span className="text-[10px] text-slate-400 tabular-nums">{w.m3 > 0 ? w.m3 : ''}</span>
+                    <div className="w-full rounded-t bg-brand-500/85" style={{ height: `${Math.max(2, (w.m3 / max) * 100)}%` }} />
+                    <span className="text-[11px] text-slate-500">{w.day}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </Panel>
+        )}
       </div>
 
-      {/* ---------- route load + operations pulse ---------- */}
+      {/* ---------- operations ---------- */}
+      <SectionLabel icon={<PackageCheck size={13} />}>{t('dashboard.secOps')}</SectionLabel>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Per-route load */}
         <Panel className="p-5 lg:col-span-2">
@@ -308,9 +316,6 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
           <Mini icon={<Banknote size={16} />} label={t('dashboard.billing')} value={String(billings.length)}
             sub={outstanding > 0 ? `฿${fmt(outstanding)} ${t('dashboard.outstanding')}` : t('dashboard.allSettled')} />
           <Mini icon={<Leaf size={16} />} label={t('dashboard.kpiCo2')} value={hasPlan ? `${fmt(totalCo2)}` : '—'} sub={t('common.kg') + '/' + t('dashboard.day')} tone="text-emerald-600" />
-          <Mini icon={<Users size={16} />} label={t('nav.drivers')} value={String(drivers.filter((d) => d.active).length)} sub={`${partners.length} ${t('nav.partners').toLowerCase()}`} />
-          <Mini icon={<Warehouse size={16} />} label={t('dashboard.products')} value={String(products.filter((p) => p.active).length)}
-            sub={`${stats.returnablePct}% ${t('analytics.returnable').toLowerCase()}`} />
         </div>
       </div>
     </div>
@@ -321,6 +326,16 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
 
 function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${className}`}>{children}</div>
+}
+
+function SectionLabel({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mt-2 -mb-1 px-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+      <span className="text-slate-300">{icon}</span>
+      {children}
+      <span className="flex-1 h-px bg-slate-200/70" />
+    </div>
+  )
 }
 
 function PanelHead({ icon, title, note }: { icon: ReactNode; title: string; note?: string }) {
