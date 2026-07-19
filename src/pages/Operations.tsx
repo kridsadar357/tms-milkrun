@@ -7,6 +7,7 @@ import {
 import { newId, useTms } from '../store'
 import { printRouteSheet } from '../lib/routeSheet'
 import { printManifest, printDispatchConfirmation } from '../lib/documents'
+import { notify } from '../lib/notify'
 import { ROUTE_COLORS } from '../components/MapView'
 import {
   Badge, Button, Card, Field, Modal, PageHeader, inputClass,
@@ -149,6 +150,12 @@ export default function Operations() {
     }
     const fresh = useTms.getState().plan
     if (fresh) printDispatchConfirmation(fresh, { trucks, drivers, partners, locations, settings })
+    if (settings.lineNotify) {
+      notify(t('notify.dispatched', {
+        n, depot: settings.depotName,
+        date: new Date().toLocaleDateString(i18n.language === 'th' ? 'th-TH' : 'en-GB'),
+      }))
+    }
     setToast(t('ops.dispatchedN', { n }))
     setTimeout(() => setToast(null), 4000)
   }
@@ -404,6 +411,12 @@ export default function Operations() {
                 description: t('ops.failedIncident', { loc: locName(podEdit.locationId) }),
                 resolved: false,
               })
+              if (settings.lineNotify) {
+                notify(t('notify.failedPod', {
+                  loc: locName(podEdit.locationId),
+                  plate: truckById.get(r.truckId)?.plateNumber ?? r.truckId,
+                }))
+              }
             } else if (incidents.some((i) => i.id === incId)) {
               deleteIncident(incId)
             }

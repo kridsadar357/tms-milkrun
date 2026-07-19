@@ -15,6 +15,7 @@ import {
   ROLES, clearCookie, countAdmins, createUser, deleteUser, findUser, listUsers, requireAuth,
   requireRole, seedUsersIfEmpty, sessionCookie, signToken, updateUser, verifyPassword,
 } from './auth.mjs'
+import { notifyChannel, sendNotification } from './notify.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -187,6 +188,20 @@ app.delete('/api/users/:username', rateLimit, requireAuth, requireRole('admin'),
   } catch {
     res.status(500).json({ error: 'failed' })
   }
+})
+
+/* --------------------------- notifications ------------------------- */
+
+app.get('/api/notify/status', requireAuth, (_req, res) => {
+  const channel = notifyChannel()
+  res.json({ configured: !!channel, channel })
+})
+
+app.post('/api/notify', rateLimit, requireAuth, requireRole('admin', 'dispatcher', 'driver'), async (req, res) => {
+  const text = String(req.body?.text ?? '').trim()
+  if (!text) return res.status(400).json({ error: 'text required' })
+  const sent = await sendNotification(text)
+  res.json({ sent })
 })
 
 // All data access requires a valid session.

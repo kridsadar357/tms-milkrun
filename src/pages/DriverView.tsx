@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useTms } from '../store'
 import { logout, type AuthUser } from '../lib/auth'
+import { notify } from '../lib/notify'
 import { Badge, Button, Field, Modal, inputClass } from '../components/ui'
 import { podDelayMinutes, type PlannedRoute, type PodRecord, type PodStatus } from '../types'
 
@@ -18,7 +19,7 @@ const NEXT: Partial<Record<string, [PlannedRoute['status'], string, typeof Navig
 export default function DriverView({ user }: { user: AuthUser }) {
   const { t, i18n } = useTranslation()
   const th = i18n.language === 'th'
-  const { plan, locations, drivers, trucks, pods,
+  const { plan, locations, drivers, trucks, pods, settings,
     updateRouteStatus, upsertPod, upsertIncident, deleteIncident, incidents, updateSettings } = useTms()
 
   const driver = drivers.find((d) => d.id === user.driverId)
@@ -54,6 +55,9 @@ export default function DriverView({ user }: { user: AuthUser }) {
         type: 'other', severity: 'medium', truckId: route.truckId, routeId: route.id,
         description: t('ops.failedIncident', { loc: locName(locationId) }), resolved: false,
       })
+      if (settings.lineNotify) {
+        notify(t('notify.failedPod', { loc: locName(locationId), plate: truck?.plateNumber ?? route.truckId }))
+      }
     } else if (incidents.some((i) => i.id === incId)) {
       deleteIncident(incId)
     }

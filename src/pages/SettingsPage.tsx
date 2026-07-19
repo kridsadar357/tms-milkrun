@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Building2, Check, Database, Fuel, History, LogOut, MapPin, Moon, ShieldCheck,
+  Bell, Building2, Check, Database, Fuel, History, LogOut, MapPin, Moon, Send, ShieldCheck,
   SlidersHorizontal, Sun, Upload,
 } from 'lucide-react'
 import { useTms } from '../store'
+import { notify, notifyStatus, type NotifyStatus } from '../lib/notify'
 
-type TabId = 'general' | 'routing' | 'cost' | 'company' | 'activity' | 'data'
+type TabId = 'general' | 'routing' | 'cost' | 'company' | 'notify' | 'activity' | 'data'
 import { validateCoords } from '../lib/geo'
 import { can } from '../lib/permissions'
 import { logout } from '../lib/auth'
@@ -37,6 +38,9 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [fuelMsg, setFuelMsg] = useState<string | null>(null)
   const [tab, setTab] = useState<TabId>('general')
+  const [notifyState, setNotifyState] = useState<NotifyStatus>({ configured: false, channel: null })
+  const [notifyMsg, setNotifyMsg] = useState<string | null>(null)
+  useEffect(() => { notifyStatus().then(setNotifyState) }, [])
 
   const coordCheck = validateCoords(form.depotLat, form.depotLng)
 
@@ -81,6 +85,7 @@ export default function SettingsPage() {
     { id: 'routing', label: t('settings.tabRouting'), icon: <MapPin size={15} /> },
     { id: 'cost', label: t('settings.tabCost'), icon: <Fuel size={15} /> },
     { id: 'company', label: t('settings.tabCompany'), icon: <Building2 size={15} /> },
+    { id: 'notify', label: t('notify.tab'), icon: <Bell size={15} /> },
     { id: 'activity', label: t('activity.title'), icon: <History size={15} /> },
     { id: 'data', label: t('settings.dataMgmt'), icon: <Database size={15} />, adminOnly: true },
   ]
@@ -268,6 +273,50 @@ export default function SettingsPage() {
           </div>
         </div>
         <Button onClick={save} disabled={!coordCheck.ok}>{t('common.save')}</Button>
+      </Card>
+      )}
+
+      {tab === 'notify' && (
+      <Card className="p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <Bell size={16} /> {t('notify.title')}
+        </h2>
+
+        <div className={`rounded-lg border px-3 py-2.5 text-sm flex items-center gap-2 ${notifyState.configured ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+          <span className={`w-2 h-2 rounded-full ${notifyState.configured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          {notifyState.configured
+            ? t('notify.configured', { channel: notifyState.channel === 'line' ? 'LINE' : 'Webhook' })
+            : t('notify.notConfigured')}
+        </div>
+
+        <label className="flex items-start gap-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={!!settings.lineNotify}
+            disabled={!notifyState.configured}
+            onChange={(e) => updateSettings({ lineNotify: e.target.checked })}
+          />
+          <span>
+            <span className="font-medium">{t('notify.enable')}</span>
+            <span className="block text-xs text-slate-400 mt-0.5">{t('notify.enableHint')} · {t('notify.events')}</span>
+          </span>
+        </label>
+
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            disabled={!notifyState.configured}
+            onClick={async () => {
+              await notify(`✅ TMS Milkrun — ${t('notify.test')}`)
+              setNotifyMsg(t('notify.testSent'))
+              setTimeout(() => setNotifyMsg(null), 3000)
+            }}
+          >
+            <Send size={15} /> {t('notify.test')}
+          </Button>
+          {notifyMsg && <span className="text-sm text-emerald-600">{notifyMsg}</span>}
+        </div>
       </Card>
       )}
 

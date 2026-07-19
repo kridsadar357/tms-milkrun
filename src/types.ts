@@ -265,6 +265,8 @@ export interface Settings {
   companyName: string
   companyTaxId: string
   companyAddress: string
+  // Send LINE / webhook notifications on key events (dispatch, failed POD)
+  lineNotify?: boolean
   // Access role for the current session
   role: Role
 }
