@@ -115,9 +115,9 @@ app.post('/api/login', rateLimit, async (req, res) => {
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return res.status(401).json({ error: 'invalid credentials' })
     }
-    const token = signToken({ sub: user.username, role: user.role })
+    const token = signToken({ sub: user.username, role: user.role, driverId: user.driverId ?? null })
     res.setHeader('Set-Cookie', sessionCookie(token))
-    res.json({ username: user.username, role: user.role })
+    res.json({ username: user.username, role: user.role, driverId: user.driverId ?? null })
   } catch {
     res.status(500).json({ error: 'login failed' })
   }
@@ -129,7 +129,7 @@ app.post('/api/logout', (_req, res) => {
 })
 
 app.get('/api/me', requireAuth, (req, res) => {
-  res.json({ username: req.user.sub, role: req.user.role })
+  res.json({ username: req.user.sub, role: req.user.role, driverId: req.user.driverId ?? null })
 })
 
 /* -------------------------- user management ------------------------ */
@@ -144,12 +144,12 @@ app.get('/api/users', requireAuth, requireRole('admin'), async (_req, res) => {
 })
 
 app.post('/api/users', rateLimit, requireAuth, requireRole('admin'), async (req, res) => {
-  const { username, role, password } = req.body ?? {}
+  const { username, role, password, driverId } = req.body ?? {}
   if (!username?.trim() || !password) return res.status(400).json({ error: 'username and password required' })
   if (!ROLES.includes(role)) return res.status(400).json({ error: 'invalid role' })
   try {
     if (await findUser(pool, username.trim())) return res.status(409).json({ error: 'user already exists' })
-    await createUser(pool, { username, role, password })
+    await createUser(pool, { username, role, password, driverId })
     res.json({ ok: true })
   } catch {
     res.status(500).json({ error: 'failed' })
@@ -158,7 +158,7 @@ app.post('/api/users', rateLimit, requireAuth, requireRole('admin'), async (req,
 
 app.put('/api/users/:username', rateLimit, requireAuth, requireRole('admin'), async (req, res) => {
   const target = req.params.username
-  const { role, password } = req.body ?? {}
+  const { role, password, driverId } = req.body ?? {}
   if (role && !ROLES.includes(role)) return res.status(400).json({ error: 'invalid role' })
   try {
     const existing = await findUser(pool, target)
@@ -166,7 +166,7 @@ app.put('/api/users/:username', rateLimit, requireAuth, requireRole('admin'), as
     if (role && role !== 'admin' && existing.role === 'admin' && (await countAdmins(pool)) <= 1) {
       return res.status(400).json({ error: 'cannot demote the last admin' })
     }
-    await updateUser(pool, target, { role, password })
+    await updateUser(pool, target, { role, password, driverId })
     res.json({ ok: true })
   } catch {
     res.status(500).json({ error: 'failed' })
@@ -220,7 +220,7 @@ app.get('/api/state', requireAuth, async (_req, res) => {
 })
 
 // Writes require an authenticated non-viewer (server-enforced read-only viewer).
-app.put('/api/state', rateLimit, requireAuth, requireRole('admin', 'dispatcher'), async (req, res) => {
+app.put('/api/state', rateLimit, requireAuth, requireRole('admin', 'dispatcher', 'driver'), async (req, res) => {
   const s = req.body ?? {}
   try {
     await withWriteLock(async () => {

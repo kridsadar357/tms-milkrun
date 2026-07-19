@@ -8,6 +8,7 @@ import { initStore, useTms } from './store'
 import { me, type AuthUser } from './lib/auth'
 import { can } from './lib/permissions'
 import Login from './components/Login'
+import DriverView from './pages/DriverView'
 import Dashboard from './pages/Dashboard'
 import Planner from './pages/Planner'
 import Locations from './pages/Locations'
@@ -86,6 +87,11 @@ export default function App() {
   }
   if (authUser === null) {
     return <Login onLogin={handleLogin} />
+  }
+
+  // Drivers get a dedicated mobile field view, not the full desktop app.
+  if (authUser.role === 'driver') {
+    return <DriverView user={authUser} />
   }
 
   const isAdmin = can(role, 'admin')

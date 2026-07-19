@@ -5,6 +5,7 @@ import type { Role } from '../types'
 export interface AuthUser {
   username: string
   role: Role
+  driverId?: string | null
 }
 
 /** Current session, or null if not logged in. */
@@ -46,6 +47,7 @@ export async function logout(): Promise<void> {
 export interface ManagedUser {
   username: string
   role: Role
+  driverId?: string | null
 }
 
 type Result = { ok: true } | { ok: false; error?: string }
@@ -66,19 +68,21 @@ export async function listUsers(): Promise<ManagedUser[]> {
   }
 }
 
-export async function createUser(username: string, role: Role, password: string): Promise<Result> {
+export async function createUser(
+  username: string, role: Role, password: string, driverId?: string | null,
+): Promise<Result> {
   return toResult(
     await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, role, password }),
+      body: JSON.stringify({ username, role, password, driverId }),
     }),
   )
 }
 
 export async function updateUser(
   username: string,
-  patch: { role?: Role; password?: string },
+  patch: { role?: Role; password?: string; driverId?: string | null },
 ): Promise<Result> {
   return toResult(
     await fetch(`/api/users/${encodeURIComponent(username)}`, {

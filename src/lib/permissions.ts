@@ -12,10 +12,13 @@ const MATRIX: Record<Role, Capability[]> = {
   admin: ['master', 'plan', 'billing', 'admin'],
   dispatcher: ['plan', 'billing'],
   viewer: [],
+  // Drivers get a dedicated mobile view (not the desktop app); they only
+  // record POD on their own trips, which the DriverView UI scopes.
+  driver: [],
 }
 
 export function can(role: Role | undefined, cap: Capability): boolean {
   return MATRIX[role ?? 'admin'].includes(cap)
 }
 
-export const ROLES: Role[] = ['admin', 'dispatcher', 'viewer']
+export const ROLES: Role[] = ['admin', 'dispatcher', 'viewer', 'driver']

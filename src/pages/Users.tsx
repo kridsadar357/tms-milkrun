@@ -5,23 +5,30 @@ import {
   createUser, deleteUser, listUsers, me, updateUser, type ManagedUser,
 } from '../lib/auth'
 import { ROLES } from '../lib/permissions'
+import { useTms } from '../store'
 import {
   Badge, Button, Card, EmptyRow, Field, Modal, PageHeader, Table, inputClass,
 } from '../components/ui'
 import type { Role } from '../types'
 
-const ROLE_TONE: Record<Role, 'green' | 'blue' | 'slate'> = {
+const ROLE_TONE: Record<Role, 'green' | 'blue' | 'slate' | 'amber'> = {
   admin: 'green',
   dispatcher: 'blue',
   viewer: 'slate',
+  driver: 'amber',
 }
 
 export default function Users() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const drivers = useTms((s) => s.drivers)
+  const driverName = (id?: string | null) => {
+    const d = id ? drivers.find((x) => x.id === id) : null
+    return d ? (i18n.language === 'th' ? d.nameTh || d.name : d.name) : ''
+  }
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [current, setCurrent] = useState<string>('')
   const [editing, setEditing] = useState<ManagedUser | 'new' | null>(null)
-  const [form, setForm] = useState({ username: '', role: 'viewer' as Role, password: '' })
+  const [form, setForm] = useState({ username: '', role: 'viewer' as Role, password: '', driverId: '' })
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
 
@@ -42,20 +49,22 @@ export default function Users() {
     setError('')
     setForm(
       u === 'new'
-        ? { username: '', role: 'viewer', password: '' }
-        : { username: u.username, role: u.role, password: '' },
+        ? { username: '', role: 'viewer', password: '', driverId: '' }
+        : { username: u.username, role: u.role, password: '', driverId: u.driverId ?? '' },
     )
     setEditing(u)
   }
 
   const submit = async () => {
     setError('')
+    const driverId = form.role === 'driver' ? form.driverId || null : null
     const res =
       editing === 'new'
-        ? await createUser(form.username.trim(), form.role, form.password)
+        ? await createUser(form.username.trim(), form.role, form.password, driverId)
         : await updateUser(form.username, {
             role: form.role,
             password: form.password || undefined,
+            driverId,
           })
     if (res.ok) {
       setEditing(null)
@@ -101,6 +110,9 @@ export default function Users() {
               </td>
               <td className="px-4 py-3">
                 <Badge tone={ROLE_TONE[u.role]}>{t(`roles.${u.role}`)}</Badge>
+                {u.role === 'driver' && u.driverId && (
+                  <span className="ml-2 text-xs text-slate-400">{driverName(u.driverId)}</span>
+                )}
               </td>
               <td className="px-4 py-3 whitespace-nowrap">
                 <Button variant="ghost" onClick={() => open(u)} aria-label={t('common.edit')}>
@@ -147,6 +159,18 @@ export default function Users() {
                 ))}
               </select>
             </Field>
+            {form.role === 'driver' && (
+              <Field label={t('users.linkedDriver')} hint={t('users.linkedDriverHint')}>
+                <select className={inputClass} value={form.driverId} onChange={(e) => setForm({ ...form, driverId: e.target.value })}>
+                  <option value="">—</option>
+                  {drivers.filter((d) => d.active).map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {driverName(d.id)}{d.truckId ? '' : ` (${t('drivers.unassigned')})`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field
               label={editing === 'new' ? t('users.password') : t('users.newPassword')}
               hint={editing === 'new' ? undefined : t('users.leaveBlank')}

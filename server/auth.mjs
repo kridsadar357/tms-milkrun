@@ -125,12 +125,12 @@ export async function findUser(pool, username) {
   return rows[0]?.doc ?? null
 }
 
-export const ROLES = ['admin', 'dispatcher', 'viewer']
+export const ROLES = ['admin', 'dispatcher', 'viewer', 'driver']
 
 /** List users without password hashes. */
 export async function listUsers(pool) {
   const { rows } = await pool.query(`SELECT doc FROM users ORDER BY username`)
-  return rows.map((r) => ({ username: r.doc.username, role: r.doc.role }))
+  return rows.map((r) => ({ username: r.doc.username, role: r.doc.role, driverId: r.doc.driverId ?? null }))
 }
 
 export async function countAdmins(pool) {
@@ -138,19 +138,20 @@ export async function countAdmins(pool) {
   return rows[0].n
 }
 
-export async function createUser(pool, { username, role, password }) {
+export async function createUser(pool, { username, role, password, driverId }) {
   const u = String(username).trim()
   await pool.query(`INSERT INTO users (username, doc) VALUES ($1, $2)`, [
     u,
-    JSON.stringify({ username: u, role, passwordHash: hashPassword(password) }),
+    JSON.stringify({ username: u, role, driverId: driverId || null, passwordHash: hashPassword(password) }),
   ])
 }
 
-export async function updateUser(pool, username, { role, password }) {
+export async function updateUser(pool, username, { role, password, driverId }) {
   const existing = await findUser(pool, username)
   if (!existing) return false
   const doc = { ...existing, role: role ?? existing.role }
   if (password) doc.passwordHash = hashPassword(password)
+  if (driverId !== undefined) doc.driverId = driverId || null
   await pool.query(`UPDATE users SET doc = $2 WHERE username = $1`, [username, JSON.stringify(doc)])
   return true
 }

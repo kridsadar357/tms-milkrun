@@ -42,6 +42,8 @@ const en = {
     leaveBlank: 'Leave blank to keep the current password',
     you: 'you',
     failed: 'Operation failed',
+    linkedDriver: 'Linked driver',
+    linkedDriverHint: 'This account sees only this driver\'s trips',
     errors: {
       'username and password required': 'Username and password are required',
       'invalid role': 'Invalid role',
@@ -435,6 +437,12 @@ const en = {
     admin: 'Admin',
     dispatcher: 'Dispatcher',
     viewer: 'Viewer',
+    driver: 'Driver',
+  },
+  driver: {
+    noTruck: 'No truck assigned',
+    notLinked: 'Your account is not linked to a driver yet — contact your admin.',
+    noTrips: 'No trips assigned to you today.',
   },
   activity: {
     title: 'Activity Log',
@@ -660,6 +668,8 @@ const th: typeof en = {
     leaveBlank: 'เว้นว่างไว้เพื่อใช้รหัสผ่านเดิม',
     you: 'คุณ',
     failed: 'ดำเนินการไม่สำเร็จ',
+    linkedDriver: 'ผูกกับคนขับ',
+    linkedDriverHint: 'บัญชีนี้จะเห็นเฉพาะเที่ยวของคนขับที่เลือก',
     errors: {
       'username and password required': 'ต้องระบุชื่อผู้ใช้และรหัสผ่าน',
       'invalid role': 'สิทธิ์ไม่ถูกต้อง',
@@ -1053,6 +1063,12 @@ const th: typeof en = {
     admin: 'ผู้ดูแลระบบ',
     dispatcher: 'ผู้จัดรถ',
     viewer: 'ผู้ชม',
+    driver: 'คนขับ',
+  },
+  driver: {
+    noTruck: 'ยังไม่ได้ผูกรถ',
+    notLinked: 'บัญชีนี้ยังไม่ได้ผูกกับคนขับ — ติดต่อผู้ดูแลระบบ',
+    noTrips: 'ยังไม่มีเที่ยวของคุณวันนี้',
   },
   activity: {
     title: 'บันทึกกิจกรรม',

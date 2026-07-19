@@ -269,7 +269,7 @@ export interface Settings {
   role: Role
 }
 
-export type Role = 'admin' | 'dispatcher' | 'viewer'
+export type Role = 'admin' | 'dispatcher' | 'viewer' | 'driver'
 
 export type AuditAction =
   | 'create' | 'update' | 'delete' | 'plan' | 'billing' | 'status' | 'settings' | 'import'
