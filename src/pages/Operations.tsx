@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Camera, CheckCircle2, Clock, Info, Printer, Truck as TruckIcon, UserRound } from 'lucide-react'
+import {
+  Camera, CheckCircle2, ChevronDown, ChevronRight, Clock, Flag, Info, Navigation,
+  Printer, RotateCcw, Send, UserRound,
+} from 'lucide-react'
 import { useTms } from '../store'
 import { printRouteSheet } from '../lib/routeSheet'
 import { printManifest } from '../lib/documents'
@@ -13,13 +16,16 @@ import { podDelayMinutes, type PlannedRoute, type PodRecord, type PodStatus, typ
 const STATUS_TONE: Record<TripStatus, 'slate' | 'blue' | 'amber' | 'green'> = {
   planned: 'slate', dispatched: 'blue', 'in-transit': 'amber', completed: 'green',
 }
-const POD_TONE: Record<PodStatus, 'slate' | 'green' | 'red'> = {
-  pending: 'slate', delivered: 'green', failed: 'red',
+/** Next trip action per status: [nextStatus, i18nKey, icon]. */
+const NEXT_ACTION: Partial<Record<TripStatus, [TripStatus, string, typeof Send]>> = {
+  planned: ['dispatched', 'planner.dispatch', Send],
+  dispatched: ['in-transit', 'planner.startTrip', Navigation],
+  'in-transit': ['completed', 'planner.complete', Flag],
 }
 
 export default function Operations() {
   const { t, i18n } = useTranslation()
-  const { plan, trucks, partners, drivers, locations, pods, settings, patchRoute, upsertPod } = useTms()
+  const { plan, trucks, partners, drivers, locations, pods, settings, patchRoute, updateRouteStatus, upsertPod } = useTms()
 
   const locById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations])
   const truckById = useMemo(() => new Map(trucks.map((tr) => [tr.id, tr])), [trucks])
@@ -32,6 +38,11 @@ export default function Operations() {
 
   const [podEdit, setPodEdit] = useState<{ route: PlannedRoute; locationId: string } | null>(null)
   const [filter, setFilter] = useState<TripStatus | 'all'>('all')
+  // Stop lists collapse per route; active trips (dispatched / in-transit) open by default.
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({})
+  const isOpen = (r: PlannedRoute) =>
+    openMap[r.id] ?? ['dispatched', 'in-transit'].includes(r.status ?? 'planned')
+  const toggleOpen = (r: PlannedRoute) => setOpenMap((m) => ({ ...m, [r.id]: !isOpen(r) }))
 
   const allRoutes = plan?.routes ?? []
   const routes = filter === 'all' ? allRoutes : allRoutes.filter((r) => (r.status ?? 'planned') === filter)
@@ -127,99 +138,155 @@ export default function Operations() {
             (s) => podById.get(`${route.id}:${s.locationId}`)?.status === 'delivered',
           ).length
           const color = ROUTE_COLORS[route.colorIndex % ROUTE_COLORS.length]
+          const total = route.stops.length
+          const pct = total > 0 ? Math.round((delivered / total) * 100) : 0
+          const status = route.status ?? 'planned'
+          const next = NEXT_ACTION[status]
+          const open = isOpen(route)
+          // On-time rate for this route (delivered / recorded stops only).
+          let rOn = 0, rRec = 0
+          for (const s of route.stops) {
+            const pod = podById.get(`${route.id}:${s.locationId}`)
+            if (pod?.arrival) {
+              const d = podDelayMinutes(route, s.etaMinutes, pod.arrival)
+              if (d != null) { rRec++; if (Math.abs(d) <= 5) rOn++ }
+            }
+          }
 
           return (
-            <Card key={route.id} className="p-4">
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
-                <TruckIcon size={16} className="text-slate-400" />
-                <span className="font-semibold text-slate-800">{truck?.plateNumber ?? route.truckId}</span>
-                <Badge tone="blue">{t('planner.round')} {route.round}</Badge>
-                <Badge tone={STATUS_TONE[route.status ?? 'planned']}>
-                  {t(`planner.statuses.${route.status ?? 'planned'}`)}
-                </Badge>
-                {driver && (
-                  <span className="text-xs text-slate-500 inline-flex items-center gap-1">
-                    <UserRound size={12} />
-                    {i18n.language === 'th' ? driver.nameTh || driver.name : driver.name}
-                  </span>
-                )}
-                {partner && <span className="text-xs text-slate-400">· {partner.name}</span>}
-
-                <div className="ml-auto flex items-center gap-3">
-                  <label className="text-xs text-slate-500 inline-flex items-center gap-1">
-                    <Clock size={13} /> {t('ops.startTime')}
-                    <input
-                      type="time"
-                      value={start}
-                      onChange={(e) => patchRoute(route.id, { startTime: e.target.value })}
-                      className="rounded-md border border-slate-300 px-1.5 py-0.5 text-xs"
-                    />
-                  </label>
-                  <span className="text-xs text-slate-500 inline-flex items-center gap-1">
-                    <CheckCircle2 size={13} className="text-emerald-500" />
-                    {t('ops.progress')} {delivered}/{route.stops.length}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    className="!px-2.5 !py-1 text-xs"
-                    onClick={() =>
-                      printRouteSheet({ route, truck, driver, partner, depotName: settings.depotName, locById })
-                    }
-                  >
-                    <Printer size={14} /> {t('ops.routeSheet')}
-                  </Button>
+            <Card key={route.id} className="overflow-hidden">
+              {/* Tier 1 — who + primary action */}
+              <div className="flex items-start gap-3 p-4">
+                <button
+                  onClick={() => toggleOpen(route)}
+                  className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  aria-label={truck?.plateNumber ?? route.truckId}
+                >
+                  {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                </button>
+                <span className="mt-0.5 w-1.5 h-9 rounded-full shrink-0" style={{ background: color }} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-slate-800">{truck?.plateNumber ?? route.truckId}</span>
+                    <Badge tone={STATUS_TONE[status]}>{t(`planner.statuses.${status}`)}</Badge>
+                    <Badge tone="blue">{t('planner.round')} {route.round}</Badge>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1 truncate">
+                    {driver && (
+                      <span className="inline-flex items-center gap-1">
+                        <UserRound size={12} />
+                        {i18n.language === 'th' ? driver.nameTh || driver.name : driver.name}
+                      </span>
+                    )}
+                    {partner && <span className="text-slate-400">{driver ? ' · ' : ''}{partner.name}</span>}
+                  </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-1.5">
+                  {next && (() => {
+                    const Icon = next[2]
+                    return (
+                      <Button className="!px-3 !py-1.5 text-xs" onClick={() => updateRouteStatus(route.id, next[0])}>
+                        <Icon size={14} /> {t(next[1])}
+                      </Button>
+                    )
+                  })()}
+                  {status !== 'planned' && (
+                    <Button
+                      variant="ghost"
+                      className="!px-2 !py-1.5 text-xs"
+                      title={t('planner.reopen')}
+                      aria-label={t('planner.reopen')}
+                      onClick={() => updateRouteStatus(route.id, 'planned')}
+                    >
+                      <RotateCcw size={14} />
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              {/* Progress bar */}
-              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mb-3">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all"
-                  style={{ width: `${Math.round((delivered / route.stops.length) * 100)}%` }}
-                />
+              {/* Tier 2 — meta strip + progress */}
+              <div className="flex items-center gap-x-5 gap-y-2 flex-wrap px-4 pl-16 text-xs">
+                <label className="inline-flex items-center gap-1.5 text-slate-500">
+                  <Clock size={13} /> {t('ops.startTime')}
+                  <input
+                    type="time"
+                    value={start}
+                    onChange={(e) => patchRoute(route.id, { startTime: e.target.value })}
+                    className="rounded-md border border-slate-300 px-1.5 py-0.5 text-xs tabular-nums"
+                  />
+                </label>
+                <span className="inline-flex items-center gap-1.5 text-slate-500">
+                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  {t('ops.deliveries')}
+                  <span className="font-semibold tabular-nums text-slate-800">{delivered}/{total}</span>
+                </span>
+                {rRec > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-slate-500">
+                    {t('ops.onTimeRate')}
+                    <span className="font-semibold tabular-nums text-slate-800">{Math.round((rOn / rRec) * 100)}%</span>
+                  </span>
+                )}
+                <button
+                  className="ml-auto inline-flex items-center gap-1 text-slate-500 hover:text-brand-600 cursor-pointer"
+                  onClick={() =>
+                    printRouteSheet({ route, truck, driver, partner, depotName: settings.depotName, locById })
+                  }
+                >
+                  <Printer size={13} /> {t('ops.routeSheet')}
+                </button>
+              </div>
+              <div className="px-4 pl-16 py-3">
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                </div>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {route.stops.map((s) => {
-                  const pod = podById.get(`${route.id}:${s.locationId}`)
-                  const delay = pod?.arrival ? podDelayMinutes(route, s.etaMinutes, pod.arrival) : null
-                  return (
-                    <div key={s.locationId} className="flex items-center gap-3 py-2 text-sm">
-                      <span className="w-6 h-6 shrink-0 rounded-full bg-slate-800 text-white flex items-center justify-center text-[11px] font-semibold">
-                        {s.sequence}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-slate-700 truncate">{locName(s.locationId)}</div>
-                        <div className="text-xs text-slate-400">
-                          {t('pod.plannedEta')} {clock(start, s.etaMinutes)}
-                          {pod?.arrival && ` · ${pod.arrival}`}
+              {/* Tier 3 — stops (collapsible) */}
+              {open && (
+                <div className="border-t border-slate-100 divide-y divide-slate-100 bg-slate-50/40">
+                  {route.stops.map((s) => {
+                    const pod = podById.get(`${route.id}:${s.locationId}`)
+                    const st = pod?.status ?? 'pending'
+                    const delay = pod?.arrival ? podDelayMinutes(route, s.etaMinutes, pod.arrival) : null
+                    const seqCls =
+                      st === 'delivered' ? 'bg-emerald-500 text-white'
+                      : st === 'failed' ? 'bg-rose-500 text-white'
+                      : 'bg-white border border-slate-300 text-slate-500'
+                    return (
+                      <div key={s.locationId} className="flex items-center gap-3 py-2.5 px-4 pl-16 text-sm">
+                        <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-semibold ${seqCls}`}>
+                          {st === 'delivered' ? <CheckCircle2 size={13} /> : s.sequence}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-slate-700 truncate">{locName(s.locationId)}</div>
+                          <div className="text-xs text-slate-400 tabular-nums">
+                            {t('pod.plannedEta')} {clock(start, s.etaMinutes)}
+                            {pod?.arrival && ` · ${t('ops.arrived')} ${pod.arrival}`}
+                          </div>
                         </div>
+                        {delay != null && (
+                          <Badge tone={delay > 5 ? 'red' : delay < -5 ? 'blue' : 'green'}>
+                            {delay > 5
+                              ? t('ops.late', { n: delay })
+                              : delay < -5
+                                ? t('ops.early', { n: -delay })
+                                : t('ops.onTime')}
+                          </Badge>
+                        )}
+                        {st === 'failed' && <Badge tone="red">{t('pod.statuses.failed')}</Badge>}
+                        {pod?.photoDataUrl && <Camera size={14} className="text-slate-400" />}
+                        <Button
+                          variant={st === 'pending' ? 'secondary' : 'ghost'}
+                          className="!px-2.5 !py-1 text-xs"
+                          onClick={() => setPodEdit({ route, locationId: s.locationId })}
+                        >
+                          {st === 'pending' ? t('ops.recordPod') : t('common.edit')}
+                        </Button>
                       </div>
-                      {delay != null && (
-                        <Badge tone={delay > 5 ? 'red' : delay < -5 ? 'blue' : 'green'}>
-                          {delay > 5
-                            ? t('ops.late', { n: delay })
-                            : delay < -5
-                              ? t('ops.early', { n: -delay })
-                              : t('ops.onTime')}
-                        </Badge>
-                      )}
-                      <Badge tone={POD_TONE[pod?.status ?? 'pending']}>
-                        {t(`pod.statuses.${pod?.status ?? 'pending'}`)}
-                      </Badge>
-                      {pod?.photoDataUrl && <Camera size={14} className="text-slate-400" />}
-                      <Button
-                        variant="secondary"
-                        className="!px-2.5 !py-1 text-xs"
-                        onClick={() => setPodEdit({ route, locationId: s.locationId })}
-                      >
-                        {t('ops.recordPod')}
-                      </Button>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
             </Card>
           )
         })}

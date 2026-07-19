@@ -458,6 +458,7 @@ const en = {
     done: 'done',
     onTimeRate: 'On-time rate',
     recorded: 'recorded',
+    arrived: 'arrived',
   },
   pod: {
     title: 'Proof of Delivery',
@@ -1058,6 +1059,7 @@ const th: typeof en = {
     done: 'เสร็จ',
     onTimeRate: 'อัตราตรงเวลา',
     recorded: 'บันทึกแล้ว',
+    arrived: 'ถึง',
   },
   pod: {
     title: 'หลักฐานการส่งมอบ',
