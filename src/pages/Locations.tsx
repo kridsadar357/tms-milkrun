@@ -34,6 +34,7 @@ export default function Locations() {
   const [editing, setEditing] = useState<DeliveryLocation | 'new' | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [formTab, setFormTab] = useState<'general' | 'demand' | 'milkrun'>('general')
 
   const zones = useMemo(
     () => [...new Set(locations.map((l) => l.zone).filter(Boolean))].sort(),
@@ -57,6 +58,7 @@ export default function Locations() {
 
   const open = (loc: DeliveryLocation | 'new') => {
     setErrors({})
+    setFormTab('general')
     setForm(
       loc === 'new'
         ? emptyForm
@@ -89,7 +91,7 @@ export default function Locations() {
       errs.coords = msg
     }
     setErrors(errs)
-    if (Object.keys(errs).length > 0) return
+    if (Object.keys(errs).length > 0) { setFormTab('general'); return }
 
     upsertLocation({
       id: editing === 'new' || !editing ? newId() : editing.id,
@@ -307,128 +309,131 @@ export default function Locations() {
           onClose={() => setEditing(null)}
           wide
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label={t('locations.code')} error={errors.code}>
-              <input className={inputClass} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-            </Field>
-            <Field label={t('locations.kind')}>
-              <select className={inputClass} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as LocationKind })}>
-                {KINDS.map((k) => (
-                  <option key={k} value={k}>{t(`locations.kinds.${k}`)}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t('locations.name')} error={errors.name}>
-              <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </Field>
-            <Field label={t('locations.nameTh')}>
-              <input className={inputClass} value={form.nameTh} onChange={(e) => setForm({ ...form, nameTh: e.target.value })} />
-            </Field>
-            <Field label={t('locations.lat')} error={errors.coords} hint={coordWarning ?? t('locations.pickOnMap')}>
-              <input className={inputClass} inputMode="decimal" placeholder="13.1544" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
-            </Field>
-            <Field label={t('locations.lng')} error={errors.coords ? ' ' : undefined} hint={coordWarning ? ' ' : undefined}>
-              <input className={inputClass} inputMode="decimal" placeholder="100.9319" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
-            </Field>
-            {mapToken && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-slate-500 mb-1">{t('locations.clickMapHint')}</p>
-                <CoordPicker
-                  token={mapToken}
-                  lat={Number.isFinite(Number(form.lat)) && form.lat !== '' ? Number(form.lat) : null}
-                  lng={Number.isFinite(Number(form.lng)) && form.lng !== '' ? Number(form.lng) : null}
-                  onPick={({ lat, lng }) => setForm({ ...form, lat: String(lat), lng: String(lng) })}
-                />
-              </div>
-            )}
-            <Field label={t('locations.demandM3')}>
-              <input className={inputClass} type="number" min="0" step="0.1" value={form.demandM3} onChange={(e) => setForm({ ...form, demandM3: e.target.value })} />
-            </Field>
-            <Field label={t('locations.demandKg')}>
-              <input className={inputClass} type="number" min="0" step="1" value={form.demandKg} onChange={(e) => setForm({ ...form, demandKg: e.target.value })} />
-            </Field>
-            <Field label={t('locations.serviceMinutes')}>
-              <input className={inputClass} type="number" min="0" step="5" value={form.serviceMinutes} onChange={(e) => setForm({ ...form, serviceMinutes: e.target.value })} />
-            </Field>
-            <Field label={t('locations.zone')}>
-              <input className={inputClass} list="zone-list" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} />
-              <datalist id="zone-list">
-                {zones.map((z) => <option key={z} value={z} />)}
-              </datalist>
-            </Field>
-            {form.kind !== 'plant' && (
-              <Field label={t('locations.deliveryPlant')} hint={t('locations.deliveryPlantHint')}>
-                <select
-                  className={inputClass}
-                  value={form.deliveryPlantId}
-                  onChange={(e) => setForm({ ...form, deliveryPlantId: e.target.value })}
-                >
-                  <option value="">{t('locations.useGlobalDepot')}</option>
-                  {locations.filter((l) => l.kind === 'plant').map((p) => (
-                    <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
-                  ))}
+          {/* Tabs */}
+          <div className="flex flex-wrap gap-1 border-b border-slate-200 mb-4 -mt-1">
+            {([
+              ['general', t('locations.tabGeneral')],
+              ['demand', t('locations.tabDemand')],
+              ...(form.kind !== 'plant' ? [['milkrun', 'Milkrun'] as const] : []),
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFormTab(id as typeof formTab)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition cursor-pointer ${
+                  formTab === id ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {id === 'general' && errors.code ? '⚠ ' : ''}{label}
+              </button>
+            ))}
+          </div>
+
+          {formTab === 'general' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label={t('locations.code')} error={errors.code}>
+                <input className={inputClass} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              </Field>
+              <Field label={t('locations.kind')}>
+                <select className={inputClass} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as LocationKind })}>
+                  {KINDS.map((k) => <option key={k} value={k}>{t(`locations.kinds.${k}`)}</option>)}
                 </select>
               </Field>
-            )}
-            {form.kind !== 'plant' && (
+              <Field label={t('locations.name')} error={errors.name}>
+                <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </Field>
+              <Field label={t('locations.nameTh')}>
+                <input className={inputClass} value={form.nameTh} onChange={(e) => setForm({ ...form, nameTh: e.target.value })} />
+              </Field>
+              <Field label={t('locations.lat')} error={errors.coords} hint={coordWarning ?? t('locations.pickOnMap')}>
+                <input className={inputClass} inputMode="decimal" placeholder="13.1544" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
+              </Field>
+              <Field label={t('locations.lng')} error={errors.coords ? ' ' : undefined} hint={coordWarning ? ' ' : undefined}>
+                <input className={inputClass} inputMode="decimal" placeholder="100.9319" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+              </Field>
+              {mapToken && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs text-slate-500 mb-1">{t('locations.clickMapHint')}</p>
+                  <CoordPicker
+                    token={mapToken}
+                    lat={Number.isFinite(Number(form.lat)) && form.lat !== '' ? Number(form.lat) : null}
+                    lng={Number.isFinite(Number(form.lng)) && form.lng !== '' ? Number(form.lng) : null}
+                    onPick={({ lat, lng }) => setForm({ ...form, lat: String(lat), lng: String(lng) })}
+                  />
+                </div>
+              )}
+              <Field label={t('locations.zone')}>
+                <input className={inputClass} list="zone-list" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} />
+                <datalist id="zone-list">{zones.map((z) => <option key={z} value={z} />)}</datalist>
+              </Field>
+            </div>
+          )}
+
+          {formTab === 'demand' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label={t('locations.demandM3')}>
+                  <input className={inputClass} type="number" min="0" step="0.1" value={form.demandM3} onChange={(e) => setForm({ ...form, demandM3: e.target.value })} />
+                </Field>
+                <Field label={t('locations.demandKg')}>
+                  <input className={inputClass} type="number" min="0" step="1" value={form.demandKg} onChange={(e) => setForm({ ...form, demandKg: e.target.value })} />
+                </Field>
+                <Field label={t('locations.serviceMinutes')}>
+                  <input className={inputClass} type="number" min="0" step="5" value={form.serviceMinutes} onChange={(e) => setForm({ ...form, serviceMinutes: e.target.value })} />
+                </Field>
+                <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+                  {t('common.active')}
+                </label>
+                <Field label={t('locations.windowStart')}>
+                  <input className={inputClass} type="time" value={form.windowStart} onChange={(e) => setForm({ ...form, windowStart: e.target.value })} />
+                </Field>
+                <Field label={t('locations.windowEnd')}>
+                  <input className={inputClass} type="time" value={form.windowEnd} onChange={(e) => setForm({ ...form, windowEnd: e.target.value })} />
+                </Field>
+              </div>
+              <div>
+                <span className="block text-sm font-medium text-slate-700 mb-1">{t('locations.deliveryDays')}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[0, 1, 2, 3, 4, 5, 6].map((d) => {
+                    const on = form.deliveryDays.includes(d)
+                    return (
+                      <button key={d} type="button"
+                        onClick={() => setForm({ ...form, deliveryDays: on ? form.deliveryDays.filter((x) => x !== d) : [...form.deliveryDays, d] })}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-colors ${on ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                        {t(`week.days.${d}`)}
+                      </button>
+                    )
+                  })}
+                </div>
+                <span className="block text-xs text-slate-500 mt-1">{form.deliveryDays.length === 0 ? t('week.everyDay') : ''}</span>
+              </div>
+            </div>
+          )}
+
+          {formTab === 'milkrun' && form.kind !== 'plant' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <Field label={t('locations.deliveryPlant')} hint={t('locations.deliveryPlantHint')}>
+                  <select className={inputClass} value={form.deliveryPlantId} onChange={(e) => setForm({ ...form, deliveryPlantId: e.target.value })}>
+                    <option value="">{t('locations.useGlobalDepot')}</option>
+                    {locations.filter((l) => l.kind === 'plant').map((p) => (
+                      <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
               <Field label={t('locations.roundsPerDay')} hint={t('locations.roundsPerDayHint')}>
                 <input className={inputClass} type="number" min="1" step="1" value={form.roundsPerDay} onChange={(e) => setForm({ ...form, roundsPerDay: e.target.value })} />
               </Field>
-            )}
-            {form.kind !== 'plant' && (
               <Field label={t('locations.pinnedTruck')} hint={t('locations.pinnedTruckHint')}>
                 <select className={inputClass} value={form.pinnedTruckId} onChange={(e) => setForm({ ...form, pinnedTruckId: e.target.value })}>
                   <option value="">{t('locations.pinnedTruckNone')}</option>
-                  {trucks.map((tr) => (
-                    <option key={tr.id} value={tr.id}>{tr.plateNumber}</option>
-                  ))}
+                  {trucks.map((tr) => <option key={tr.id} value={tr.id}>{tr.plateNumber}</option>)}
                 </select>
               </Field>
-            )}
-            <Field label={t('locations.windowStart')}>
-              <input className={inputClass} type="time" value={form.windowStart} onChange={(e) => setForm({ ...form, windowStart: e.target.value })} />
-            </Field>
-            <Field label={t('locations.windowEnd')}>
-              <input className={inputClass} type="time" value={form.windowEnd} onChange={(e) => setForm({ ...form, windowEnd: e.target.value })} />
-            </Field>
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
-              <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-              {t('common.active')}
-            </label>
-          </div>
-
-          <div className="mt-4">
-            <span className="block text-sm font-medium text-slate-700 mb-1">
-              {t('locations.deliveryDays')}
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {[0, 1, 2, 3, 4, 5, 6].map((d) => {
-                const on = form.deliveryDays.includes(d)
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        deliveryDays: on
-                          ? form.deliveryDays.filter((x) => x !== d)
-                          : [...form.deliveryDays, d],
-                      })
-                    }
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
-                      on ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {t(`week.days.${d}`)}
-                  </button>
-                )
-              })}
             </div>
-            <span className="block text-xs text-slate-500 mt-1">
-              {form.deliveryDays.length === 0 ? t('week.everyDay') : ''}
-            </span>
-          </div>
+          )}
 
           <div className="flex justify-end gap-2 mt-6">
             <Button variant="secondary" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>

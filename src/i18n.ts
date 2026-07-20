@@ -219,6 +219,7 @@ const en = {
   },
   locations: {
     title: 'Delivery Locations',
+    tabGeneral: 'General', tabDemand: 'Demand & time',
     code: 'Code',
     name: 'Name (EN)',
     nameTh: 'Name (TH)',
@@ -893,6 +894,7 @@ const th: typeof en = {
   },
   locations: {
     title: 'จุดส่งสินค้า',
+    tabGeneral: 'ทั่วไป', tabDemand: 'ความต้องการ & เวลา',
     code: 'รหัส',
     name: 'ชื่อ (อังกฤษ)',
     nameTh: 'ชื่อ (ไทย)',
