@@ -30,6 +30,27 @@ const settings = {"language":"en","theme":"light","mapboxToken":"","depotName":"
 
 export const SEED = { partners, trucks, drivers, locations, products, billings: [], pods: [], incidents: [], settings }
 
+/** ~14 days of sample plan-history snapshots so the Trends charts show data on a fresh demo. */
+function sampleHistory() {
+  const out = []
+  let seed = 7
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
+  const wob = (base, amp) => Math.round(base + (rnd() - 0.5) * 2 * amp)
+  const now = Date.now()
+  for (let d = 13; d >= 0; d--) {
+    const dt = new Date(now - d * 86400000)
+    const date = dt.toISOString().slice(0, 10)
+    out.push({
+      id: date, date, at: dt.toISOString(),
+      cost: wob(32800, 1400), distanceKm: wob(1500, 90),
+      trucks: 8, routes: 8, stops: 15, deliveries: wob(14, 1),
+      onTimePct: Math.min(100, wob(95, 5)),
+      utilKgPct: wob(59, 4), utilM3Pct: wob(35, 3), co2Kg: wob(895, 25),
+    })
+  }
+  return out
+}
+
 /* --------------------------- insertion --------------------------- */
 
 async function insertSeed(pool) {
@@ -46,7 +67,7 @@ async function insertSeed(pool) {
         ])
       }
     }
-    for (const [key, doc] of [['settings', settings], ['plan', null], ['audit', []], ['scenarios', []]]) {
+    for (const [key, doc] of [['settings', settings], ['plan', null], ['audit', []], ['scenarios', []], ['planHistory', sampleHistory()]]) {
       await client.query(
         `INSERT INTO singletons (key, doc) VALUES ($1, $2)
          ON CONFLICT (key) DO UPDATE SET doc = EXCLUDED.doc`,

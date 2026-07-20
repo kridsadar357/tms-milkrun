@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { drainSaves, loadState, reseedDatabase, saveState } from './lib/api'
-import { estimateCo2Kg } from './types'
+import { estimateCo2Kg, podDelayMinutes } from './types'
 import type {
   AuditAction,
   AuditEntry,
@@ -9,6 +9,7 @@ import type {
   DeliveryLocation,
   Driver,
   Incident,
+  PlanSnapshot,
   PlannedRoute,
   PlanResult,
   PodRecord,
@@ -116,6 +117,10 @@ export interface TmsState {
   saveScenario: (name: string) => void
   deleteScenario: (id: string) => void
   loadScenario: (id: string) => void
+  planHistory: PlanSnapshot[]
+  /** Record a metrics snapshot of the current plan into history (one per day). */
+  savePlanSnapshot: () => void
+  deletePlanSnapshot: (id: string) => void
   updateRouteStatus: (routeId: string, status: TripStatus) => void
   /** Release every still-planned trip at once; returns how many were dispatched. */
   dispatchAllPlanned: () => number
@@ -156,6 +161,7 @@ export const useTms = create<TmsState>()((set, get) => ({
       locations: seedLocations,
       plan: null as PlanResult | null,
       scenarios: [] as Scenario[],
+      planHistory: [] as PlanSnapshot[],
       billings: [] as BillingRecord[],
       pods: [] as PodRecord[],
       incidents: [] as Incident[],
@@ -261,6 +267,49 @@ export const useTms = create<TmsState>()((set, get) => ({
         const sc = get().scenarios.find((x) => x.id === id)
         if (sc) set({ plan: sc.plan })
       },
+
+      savePlanSnapshot: () => {
+        const s = get()
+        const routes = s.plan?.routes.filter((r) => r.stops.length > 0) ?? []
+        if (routes.length === 0) return
+        const truckById = new Map(s.trucks.map((tr) => [tr.id, tr]))
+        const podById = new Map(s.pods.map((p) => [p.id, p]))
+        let stops = 0, delivered = 0, onTime = 0, recorded = 0, kgSum = 0, m3Sum = 0, n = 0
+        for (const r of routes) {
+          const truck = truckById.get(r.truckId)
+          if (truck) { kgSum += r.totalKg / truck.capacityKg; m3Sum += r.totalM3 / truck.capacityM3; n++ }
+          for (const st of r.stops) {
+            stops++
+            const pod = podById.get(`${r.id}:${st.locationId}`)
+            if (pod?.status === 'delivered') delivered++
+            if (pod?.arrival) {
+              const d = podDelayMinutes(r, st.etaMinutes, pod.arrival)
+              if (d != null) { recorded++; if (Math.abs(d) <= 5) onTime++ }
+            }
+          }
+        }
+        // On-time: from recorded PODs, else planned time-window compliance.
+        const windowLate = routes.reduce((a, r) => a + r.stops.filter((x) => x.lateBy).length, 0)
+        const onTimePct = recorded > 0
+          ? Math.round((onTime / recorded) * 100)
+          : (stops > 0 ? Math.round(((stops - windowLate) / stops) * 100) : 100)
+        const date = new Date().toISOString().slice(0, 10)
+        const snap: PlanSnapshot = {
+          id: date, date, at: new Date().toISOString(),
+          cost: Math.round(routes.reduce((a, r) => a + r.cost, 0)),
+          distanceKm: Math.round(routes.reduce((a, r) => a + r.distanceKm, 0)),
+          trucks: new Set(routes.map((r) => r.truckId)).size,
+          routes: routes.length,
+          stops, deliveries: delivered, onTimePct,
+          utilKgPct: n ? Math.round((kgSum / n) * 100) : 0,
+          utilM3Pct: n ? Math.round((m3Sum / n) * 100) : 0,
+          co2Kg: Math.round(routes.reduce((a, r) => a + estimateCo2Kg(r.distanceKm, s.settings), 0)),
+        }
+        set((st) => ({ planHistory: [snap, ...st.planHistory.filter((h) => h.id !== date)].slice(0, 120) }))
+        get().logAudit('plan', 'history', date)
+      },
+      deletePlanSnapshot: (id) =>
+        set((st) => ({ planHistory: st.planHistory.filter((x) => x.id !== id) })),
 
       patchRoute: (routeId, patch) =>
         set((s) =>
@@ -471,6 +520,7 @@ function snapshot(s: TmsState) {
     settings: s.settings,
     plan: s.plan,
     scenarios: s.scenarios,
+    planHistory: s.planHistory,
   }
 }
 
@@ -503,6 +553,7 @@ function hydrateFromRemote(
     } as Settings,
     plan: (remote.plan ?? null) as PlanResult | null,
     scenarios: (remote.scenarios ?? []) as Scenario[],
+    planHistory: (remote.planHistory ?? []) as PlanSnapshot[],
   })
   applyingRemote = false
 }

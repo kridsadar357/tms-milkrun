@@ -1,20 +1,22 @@
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Boxes, Clock, FileDown, Info, Recycle, Route as RouteIcon, Timer, TriangleAlert,
+  Boxes, Clock, FileDown, Info, Recycle, Route as RouteIcon, Timer, TrendingUp, TriangleAlert,
 } from 'lucide-react'
 import { useTms } from '../store'
 import { computeMilkrunStats } from '../lib/analytics'
 import { exportCsv } from '../lib/csv'
 import { Badge, Button, Card, PageHeader } from '../components/ui'
+import type { PlanSnapshot } from '../types'
 
 const SERIES_1 = '#2a78d6' // volume / returnable
 const SERIES_2 = '#1baf7a' // weight / one-way
 
 export default function Analytics() {
   const { t, i18n } = useTranslation()
-  const { plan, trucks, locations, products, pods, incidents, audit, settings } = useTms()
+  const { plan, trucks, locations, products, pods, incidents, audit, settings, planHistory, savePlanSnapshot } = useTms()
   const fmt = (n: number) => n.toLocaleString(i18n.language === 'th' ? 'th-TH' : 'en-US')
+  const history = useMemo(() => [...planHistory].sort((a, b) => a.date.localeCompare(b.date)), [planHistory])
 
   const s = useMemo(
     () => computeMilkrunStats({ plan, trucks, locations, products, pods, incidents, audit, settings }),
@@ -79,6 +81,30 @@ export default function Analytics() {
           </Button>
         }
       />
+
+      {/* Trends over time (plan history) */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <span className="text-slate-400"><TrendingUp size={16} /></span>
+            {t('trends.title')}
+            {history.length > 0 && <span className="text-xs font-normal text-slate-400">· {history.length} {t('trends.days')}</span>}
+          </h2>
+          <Button variant="secondary" className="!py-1.5 text-xs" onClick={savePlanSnapshot}>
+            <TrendingUp size={14} /> {t('trends.save')}
+          </Button>
+        </div>
+        {history.length < 2 ? (
+          <p className="text-sm text-slate-500 mt-3">{t('trends.empty')}</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mt-4">
+            <TrendChart title={`${t('trends.cost')} (฿)`} history={history} pick={(h) => h.cost} color="#2a78d6" fmt={(v) => `฿${fmt(Math.round(v))}`} />
+            <TrendChart title={t('trends.onTime')} history={history} pick={(h) => h.onTimePct} color="#1baf7a" fmt={(v) => `${Math.round(v)}%`} max={100} />
+            <TrendChart title={t('trends.util')} history={history} pick={(h) => h.utilKgPct} color="#eda100" fmt={(v) => `${Math.round(v)}%`} max={100} />
+            <TrendChart title={`${t('trends.co2')} (kg)`} history={history} pick={(h) => h.co2Kg} color="#64748b" fmt={(v) => `${fmt(Math.round(v))}`} />
+          </div>
+        )}
+      </Card>
 
       {/* Milkrun principle rings */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -226,6 +252,37 @@ export default function Analytics() {
 }
 
 /* -------------------------- little chart pieces ------------------------- */
+
+function TrendChart({ title, history, pick, color, fmt, max }: {
+  title: string; history: PlanSnapshot[]; pick: (h: PlanSnapshot) => number
+  color: string; fmt: (v: number) => string; max?: number
+}) {
+  const vals = history.map(pick)
+  const n = vals.length
+  const hi = (max ?? (Math.max(...vals) * 1.08)) || 1
+  const lo = max ? 0 : Math.min(...vals) * 0.92
+  const W = 240, H = 88, PX = 5, PY = 8
+  const x = (i: number) => PX + (n <= 1 ? 0 : (i / (n - 1)) * (W - 2 * PX))
+  const y = (v: number) => H - PY - ((v - lo) / (hi - lo || 1)) * (H - 2 * PY)
+  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const last = vals[n - 1]
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-xs font-medium text-slate-500">{title}</span>
+        <span className="text-sm font-semibold tabular-nums" style={{ color }}>{fmt(last)}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={title}>
+        <polyline fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={pts} />
+        <circle cx={x(n - 1)} cy={y(last)} r="3.5" fill={color} stroke="#fff" strokeWidth="1.5" />
+      </svg>
+      <div className="flex justify-between text-[10px] text-slate-400 mt-1 tabular-nums">
+        <span>{history[0].date.slice(5)}</span>
+        <span>{history[n - 1].date.slice(5)}</span>
+      </div>
+    </div>
+  )
+}
 
 function RingCard({ pct, color, label, sub, disabled }: { pct: number; color: string; label: string; sub?: string; disabled?: boolean }) {
   const r = 30, c = 2 * Math.PI * r

@@ -23,6 +23,23 @@ export interface RateCard {
 
 export type Shift = 'day' | 'night'
 
+/** A daily metrics snapshot of a plan — for history & trends (one per date). */
+export interface PlanSnapshot {
+  id: string // date 'YYYY-MM-DD' (one snapshot per day, latest wins)
+  date: string
+  at: string // ISO timestamp recorded
+  cost: number // ฿/day
+  distanceKm: number
+  trucks: number
+  routes: number
+  stops: number
+  deliveries: number
+  onTimePct: number
+  utilKgPct: number
+  utilM3Pct: number
+  co2Kg: number
+}
+
 /** A saved plan snapshot for A/B comparison and history. */
 export interface Scenario {
   id: string

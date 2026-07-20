@@ -38,7 +38,7 @@ type SortKey = 'status' | 'plate' | 'driver' | 'departure' | 'progress' | 'ontim
 export default function Operations() {
   const { t, i18n } = useTranslation()
   const { plan, trucks, partners, drivers, locations, pods, incidents, settings,
-    patchRoute, updateRouteStatus, dispatchAllPlanned, upsertPod, upsertIncident, deleteIncident } = useTms()
+    patchRoute, updateRouteStatus, dispatchAllPlanned, savePlanSnapshot, upsertPod, upsertIncident, deleteIncident } = useTms()
 
   const locById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations])
   const truckById = useMemo(() => new Map(trucks.map((tr) => [tr.id, tr])), [trucks])
@@ -150,6 +150,7 @@ export default function Operations() {
     }
     const fresh = useTms.getState().plan
     if (fresh) printDispatchConfirmation(fresh, { trucks, drivers, partners, locations, settings })
+    savePlanSnapshot() // record today's plan into history for trends
     if (settings.lineNotify) {
       notify(t('notify.dispatched', {
         n, depot: settings.depotName,

@@ -460,6 +460,16 @@ const en = {
     dispatched: '🚚 Dispatched {{n}} trips for {{date}} · {{depot}}',
     failedPod: '⚠️ Failed delivery: {{loc}} ({{plate}})',
   },
+  trends: {
+    title: 'Trends over time',
+    days: 'days',
+    save: 'Save snapshot',
+    empty: 'Snapshots are recorded when you dispatch each day (or press Save snapshot). Trends appear once there are at least two days.',
+    cost: 'Daily cost',
+    onTime: 'On-time %',
+    util: 'Utilization %',
+    co2: 'CO₂',
+  },
   activity: {
     title: 'Activity Log',
     empty: 'No activity recorded yet.',
@@ -1101,6 +1111,16 @@ const th: typeof en = {
     testFailed: 'ส่งไม่สำเร็จ — ตรวจ env/ช่องทางของเซิร์ฟเวอร์',
     dispatched: '🚚 จ่ายงาน {{n}} เที่ยว วันที่ {{date}} · {{depot}}',
     failedPod: '⚠️ ส่งไม่สำเร็จ: {{loc}} ({{plate}})',
+  },
+  trends: {
+    title: 'แนวโน้มย้อนหลัง',
+    days: 'วัน',
+    save: 'บันทึกสแนปช็อต',
+    empty: 'ระบบบันทึกสแนปช็อตเมื่อจ่ายงานแต่ละวัน (หรือกดบันทึกสแนปช็อต) — กราฟแนวโน้มจะขึ้นเมื่อมีอย่างน้อย 2 วัน',
+    cost: 'ต้นทุนรายวัน',
+    onTime: 'ตรงเวลา %',
+    util: 'การบรรทุก %',
+    co2: 'CO₂',
   },
   activity: {
     title: 'บันทึกกิจกรรม',
