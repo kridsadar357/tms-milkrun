@@ -497,7 +497,10 @@ export default function VisualTruck() {
         ...dim
       }
     }
-  }, [currentRoute, manualTruckType, trucks])
+    // Depend on truckId (not the route object): a loadPlan patch changes the
+    // route's identity every save; keying on the object would churn this memo
+    // and every effect below it into an infinite loop.
+  }, [currentRoute?.truckId, manualTruckType, trucks])
 
   // Restore/Initialize packages list when route or truck selection changes
   useEffect(() => {
@@ -824,7 +827,7 @@ export default function VisualTruck() {
     }
     
     return violations
-  }, [packages, currentRoute])
+  }, [packages, currentRoute?.id])
 
   const isLifoBlocked = (pkgId: string) => {
     return lifoViolations.some(v => v.earlyPkg.id === pkgId)
