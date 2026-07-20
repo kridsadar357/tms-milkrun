@@ -245,7 +245,7 @@ export default function Operations() {
                 <SortTh label={t('ops.startTime')} k="departure" sort={sort} onSort={toggleSort} />
                 <SortTh label={t('ops.deliveries')} k="progress" sort={sort} onSort={toggleSort} />
                 <SortTh label={t('ops.onTimeRate')} k="ontime" sort={sort} onSort={toggleSort} align="right" />
-                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">{t('common.actions')}</th>
+                <th className="sticky right-0 z-20 bg-slate-50 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[-6px_0_8px_-6px_rgba(2,6,23,0.15)]">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -255,7 +255,7 @@ export default function Operations() {
                 const open = isOpen(route)
                 return (
                   <Fragment key={route.id}>
-                    <tr className={`transition-colors ${open ? 'bg-slate-50/50' : 'hover:bg-slate-50/70'}`}>
+                    <tr className={`transition-colors ${open ? 'bg-slate-50' : 'hover:bg-slate-100'}`}>
                       <td className="pl-3 align-middle">
                         <button onClick={() => toggleOpen(route)} className="text-slate-400 hover:text-slate-700 cursor-pointer align-middle" aria-label={plate}>
                           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -296,7 +296,7 @@ export default function Operations() {
                           <span className={`tabular-nums font-medium ${onTimePct >= 90 ? 'text-emerald-600' : onTimePct >= 70 ? 'text-amber-600' : 'text-rose-600'}`}>{onTimePct}%</span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={`px-3 py-3 sticky right-0 z-10 ${open ? 'bg-slate-50' : 'bg-white'} shadow-[-6px_0_8px_-6px_rgba(2,6,23,0.15)]`}>
                         <div className="flex items-center justify-end gap-1">
                           {next && (() => {
                             const Icon = next[2]
@@ -323,7 +323,7 @@ export default function Operations() {
                     {open && (
                       <tr>
                         <td colSpan={8} className="p-0">
-                          <div className="bg-slate-50/60 border-t border-slate-100 px-4 py-3 pl-12">
+                          <div className="bg-slate-50 border-t border-slate-100 px-4 py-3 pl-12">
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">

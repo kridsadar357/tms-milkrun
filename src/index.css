@@ -66,6 +66,14 @@ body {
 :root[data-theme='dark'] .bg-slate-800 {
   background-color: #475569;
 }
+/* Hover variants aren't caught by the base .bg-slate-* rules above — remap them
+   so row hover reads as a subtle dark highlight, not a light wash. */
+:root[data-theme='dark'] .hover\:bg-slate-50:hover {
+  background-color: #1e293b;
+}
+:root[data-theme='dark'] .hover\:bg-slate-100:hover {
+  background-color: #243244;
+}
 
 /* Text — dark greys become light greys (safe on the dark sidebar too) */
 :root[data-theme='dark'] .text-slate-900 {
