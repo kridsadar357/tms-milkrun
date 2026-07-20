@@ -1,13 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Banknote, BarChart3, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Menu, Moon, Receipt, Route as RouteIcon,
+  Banknote, BarChart3, ClipboardCheck, Handshake, LayoutDashboard, MapPin, Menu, Moon, Receipt, Rocket, Route as RouteIcon,
   Settings as SettingsIcon, ShieldCheck, Sun, TriangleAlert, Truck as TruckIcon, UserRound, Boxes, Package
 } from 'lucide-react'
 import { initStore, useTms } from './store'
 import { me, type AuthUser } from './lib/auth'
 import { can } from './lib/permissions'
 import Login from './components/Login'
+import SetupWizard from './components/SetupWizard'
 import DriverView from './pages/DriverView'
 import Dashboard from './pages/Dashboard'
 import Planner from './pages/Planner'
@@ -57,6 +58,9 @@ export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const dataEmpty = useTms((s) => s.locations.length === 0 && s.trucks.length === 0)
+  const wizardAuto = useRef(false)
 
   // Check for an existing session on load; load the store only once authenticated.
   useEffect(() => {
@@ -81,6 +85,14 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light'
   }, [theme])
+
+  // First-run guided setup: auto-open the wizard once when the workspace is empty.
+  useEffect(() => {
+    if (authUser && authUser.role !== 'driver' && dataEmpty && !wizardAuto.current) {
+      wizardAuto.current = true
+      setWizardOpen(true)
+    }
+  }, [authUser, dataEmpty])
 
   if (authUser === undefined) {
     return <div className="h-full flex items-center justify-center text-slate-400 text-sm">…</div>
@@ -152,6 +164,14 @@ export default function App() {
         </div>
 
         <nav className="flex-1 py-3 overflow-y-auto">
+          <div className="px-3 pb-2">
+            <button
+              onClick={() => { setWizardOpen(true); setSidebarOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-brand-500/15 text-brand-200 hover:bg-brand-500/25 border border-brand-500/30 cursor-pointer transition-colors"
+            >
+              <Rocket size={16} /> {t('wizard.title')}
+            </button>
+          </div>
           {nav.map((item) => (
             <div key={item.id}>
               {item.section && (
@@ -235,6 +255,10 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {wizardOpen && (
+        <SetupWizard onNavigate={(p) => go(p as Page)} onClose={() => setWizardOpen(false)} />
+      )}
     </div>
   )
 }
