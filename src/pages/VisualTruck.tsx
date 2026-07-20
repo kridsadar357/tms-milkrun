@@ -656,7 +656,9 @@ export default function VisualTruck() {
     }
     setUnloadState('idle')
     setAnimIndex(-1)
-  }, [currentRoute, manualTruckType, locations, products, currentTruckInfo.width, currentTruckInfo.length, currentTruckInfo.height])
+    // Depend on the route *id* (not the object): patching loadPlan below must not
+    // re-run this rebuild, or it fights the save effect in an infinite loop.
+  }, [currentRoute?.id, manualTruckType, locations, products, currentTruckInfo.width, currentTruckInfo.length, currentTruckInfo.height])
 
   // PERSIST CURRENT LOAD PATTERN TO STORE
   useEffect(() => {
@@ -673,8 +675,11 @@ export default function VisualTruck() {
       isLoaded: p.isLoaded
     }))
 
-    const savedPlan = currentRoute.loadPlan || []
-    
+    // Read the route's saved plan fresh from the store (not the possibly-stale
+    // closure) so persisting never triggers a rebuild → save → rebuild loop.
+    const live = useTms.getState().plan?.routes.find(r => r.id === currentRoute.id)
+    const savedPlan = live?.loadPlan || []
+
     // Compare states to avoid infinite loops
     const isDifferent = savedPlan.length !== planToSave.length ||
       planToSave.some((p, i) => {
@@ -693,7 +698,7 @@ export default function VisualTruck() {
     if (isDifferent) {
       useTms.getState().patchRoute(currentRoute.id, { loadPlan: planToSave })
     }
-  }, [packages, currentRoute])
+  }, [packages, currentRoute?.id])
 
   // Computed Values
   const totals = useMemo(() => {
@@ -1125,7 +1130,7 @@ export default function VisualTruck() {
     renderer.setSize(width, height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.shadowMap.type = THREE.PCFShadowMap
     container.appendChild(renderer.domElement)
 
     const ambientLight = new THREE.AmbientLight('#ffffff', 0.6)
