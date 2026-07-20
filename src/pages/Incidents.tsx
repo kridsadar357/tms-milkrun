@@ -97,7 +97,7 @@ export default function Incidents() {
       />
 
       <Card>
-        <Table
+        <Table stickyActions
           headers={[
             t('incidents.date'), t('incidents.type'), t('incidents.severity'), t('incidents.truck'),
             t('incidents.description'), t('common.status'), t('common.actions'),

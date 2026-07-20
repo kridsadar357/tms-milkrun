@@ -168,7 +168,7 @@ export default function Products() {
       </div>
 
       <Card>
-        <Table
+        <Table stickyActions
           headers={[
             t('products.code'), t('products.name'), t('products.supplier'), 
             t('products.weight'), t('products.dimensions'), 'Volume (m³)',

@@ -25,6 +25,7 @@ export default function Payments() {
   const { t, i18n } = useTranslation()
   const { billings, partners, plan, settings, createBillingsFromPlan, upsertBilling, deleteBilling } = useTms()
   const [editing, setEditing] = useState<BillingRecord | null>(null)
+  const [detail, setDetail] = useState<BillingRecord | null>(null)
   const [form, setForm] = useState({ invoiceNo: '', fuelSurchargePct: '0', note: '' })
   const [toast, setToast] = useState<string | null>(null)
   const [statementOpen, setStatementOpen] = useState(false)
@@ -202,7 +203,7 @@ export default function Payments() {
       )}
 
       <Card>
-        <Table
+        <Table stickyActions
           headers={[
             t('payments.invoiceNo'), t('payments.partner'), t('payments.billingDate'), t('payments.dueDate'),
             t('payments.routes'), `${t('payments.subtotal')} (${t('common.baht')})`,
@@ -216,8 +217,8 @@ export default function Payments() {
             const a = billingAmounts(b)
             const isOverdue = b.status !== 'paid' && b.dueDate < today
             return (
-              <tr key={b.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{b.invoiceNo}</td>
+              <tr key={b.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setDetail(b)} title={t('payments.viewDetail')}>
+                <td className="px-4 py-3 font-medium text-brand-600 whitespace-nowrap underline decoration-transparent hover:decoration-inherit underline-offset-2">{b.invoiceNo}</td>
                 <td className="px-4 py-3 text-slate-600">{partnerById.get(b.partnerId)?.name ?? '—'}</td>
                 <td className="px-4 py-3 whitespace-nowrap">{fmtDate(b.billingDate)}</td>
                 <td className={`px-4 py-3 whitespace-nowrap ${isOverdue ? 'text-red-600 font-medium' : ''}`}>
@@ -234,7 +235,7 @@ export default function Payments() {
                     <div className="text-[11px] text-slate-400 mt-0.5">{fmtDate(b.paidDate)}</div>
                   )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   {b.status === 'draft' && (
                     <Button variant="secondary" className="!px-2.5 !py-1 text-xs" onClick={() => setStatus(b, 'approved')}>
                       {t('payments.approve')}
@@ -295,6 +296,53 @@ export default function Payments() {
           </div>
         </Modal>
       )}
+
+      {detail && (() => {
+        const a = billingAmounts(detail)
+        const partner = partnerById.get(detail.partnerId)
+        const Row = ({ label, value, strong }: { label: ReactNode; value: ReactNode; strong?: boolean }) => (
+          <div className={`flex items-center justify-between gap-4 py-1.5 text-sm ${strong ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
+            <span className="text-slate-500">{label}</span>
+            <span className={`tabular-nums ${strong ? '' : 'text-slate-800'}`}>{value}</span>
+          </div>
+        )
+        return (
+          <Modal title={`${t('payments.viewDetail')} — ${detail.invoiceNo}`} onClose={() => setDetail(null)} wide>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+              <div>
+                <div className="font-semibold text-slate-900">{partner?.name ?? '—'}</div>
+                <div className="text-xs text-slate-500">{partner?.contactPerson} {partner?.phone ? `· ${partner.phone}` : ''}</div>
+              </div>
+              <Badge tone={STATUS_TONE[detail.status]}>{t(`payments.statuses.${detail.status}`)}</Badge>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+              <div>
+                <Row label={t('payments.billingDate')} value={fmtDate(detail.billingDate)} />
+                <Row label={t('payments.dueDate')} value={fmtDate(detail.dueDate)} />
+                {detail.status === 'paid' && detail.paidDate && <Row label={t('payments.statuses.paid')} value={fmtDate(detail.paidDate)} />}
+                <Row label={t('payments.routes')} value={detail.routesCount} />
+                <Row label={t('planner.distance')} value={`${fmt(detail.distanceKm)} ${t('common.km')}`} />
+                <Row label={`${t('common.m3')} / ${t('common.kg')}`} value={`${detail.totalM3.toFixed(1)} / ${fmt(detail.totalKg)}`} />
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4 mt-3 sm:mt-0">
+                <Row label={t('payments.subtotal')} value={`฿${fmt(detail.subtotal)}`} />
+                {detail.fuelSurchargePct > 0 && <Row label={`${t('payments.fuelSurcharge')} (${detail.fuelSurchargePct}%)`} value={`฿${fmt(a.base - detail.subtotal)}`} />}
+                <Row label={`${t('payments.vat')} ${detail.vatPct}%`} value={`฿${fmt(a.vat)}`} />
+                <Row label={`${t('payments.wht')} ${detail.whtPct}%`} value={`−฿${fmt(a.wht)}`} />
+                <div className="border-t border-slate-200 mt-2 pt-2">
+                  <Row label={t('payments.netPayable')} value={`฿${fmt(a.netPayable)}`} strong />
+                </div>
+              </div>
+            </div>
+            {detail.note && <div className="mt-4 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{detail.note}</div>}
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="secondary" onClick={() => { printInvoice(detail, partner, settings) }}><Printer size={15} /> {t('payments.invoicePdf')}</Button>
+              <Button variant="secondary" onClick={() => { setDetail(null); openEdit(detail) }}><Pencil size={15} /> {t('common.edit')}</Button>
+              <Button onClick={() => setDetail(null)}>{t('common.cancel')}</Button>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {statementOpen && (
         <StatementModal

@@ -248,7 +248,7 @@ export default function Locations() {
             {zones.map((z) => <option key={z} value={z}>{z}</option>)}
           </select>
         </div>
-        <Table
+        <Table stickyActions
           headers={[
             t('locations.code'), t('locations.name'), t('locations.kind'), t('locations.zone'),
             t('locations.coords'), t('locations.demandM3'), t('locations.demandKg'),

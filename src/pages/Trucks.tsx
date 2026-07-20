@@ -117,7 +117,7 @@ export default function Trucks() {
       })()}
 
       <Card>
-        <Table
+        <Table stickyActions
           headers={[
             t('trucks.plate'), t('trucks.type'), t('trucks.assignmentMode'), t('trucks.partner'),
             t('trucks.driver'), t('trucks.capacity'), t('trucks.roundsPerDay'), t('trucks.fixedCost'),

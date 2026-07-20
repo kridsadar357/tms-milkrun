@@ -104,7 +104,7 @@ export default function Drivers() {
       })()}
 
       <Card>
-        <Table
+        <Table stickyActions
           headers={[
             t('drivers.code'), t('drivers.name'), t('drivers.licenseNo'), t('drivers.licenseType'),
             t('drivers.phone'), t('drivers.truck'), t('common.status'), t('common.actions'),

@@ -179,7 +179,8 @@ export default function SettingsPage() {
         </Field>
 
         <fieldset>
-          <legend className="text-sm font-semibold text-slate-800 mb-3">{t('settings.depot')}</legend>
+          <legend className="text-sm font-semibold text-slate-800 mb-1">{t('settings.depot')}</legend>
+          <p className="text-xs text-slate-400 mb-3">{t('settings.depotHint')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <Field label={t('settings.depotName')}>

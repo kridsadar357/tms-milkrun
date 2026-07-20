@@ -279,7 +279,9 @@ app.put('/api/state', rateLimit, requireAuth, requireRole('admin', 'dispatcher',
       }
     })
     res.json({ ok: true })
-  } catch {
+  } catch (e) {
+    // Log the real cause so transient 500s (Neon timeout, lock contention) are diagnosable.
+    console.error('PUT /api/state failed:', e?.message || e)
     res.status(500).json({ error: 'write failed' })
   }
 })

@@ -75,6 +75,27 @@ body {
   background-color: #243244;
 }
 
+/* Frozen last (actions) column for wide data tables — Docker-style. */
+.sticky-actions thead th:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: #ffffff;
+  box-shadow: -7px 0 8px -7px rgba(2, 6, 23, 0.16);
+}
+.sticky-actions tbody td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: #ffffff;
+  box-shadow: -7px 0 8px -7px rgba(2, 6, 23, 0.16);
+}
+:root[data-theme='dark'] .sticky-actions thead th:last-child,
+:root[data-theme='dark'] .sticky-actions tbody td:last-child {
+  background: #172033;
+  box-shadow: -7px 0 8px -7px rgba(0, 0, 0, 0.45);
+}
+
 /* Text — dark greys become light greys (safe on the dark sidebar too) */
 :root[data-theme='dark'] .text-slate-900 {
   color: #f8fafc;

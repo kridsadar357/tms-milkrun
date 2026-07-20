@@ -132,10 +132,14 @@ export function Badge({
   )
 }
 
-export function Table({ headers, children }: { headers: ReactNode[]; children: ReactNode }) {
+export function Table({ headers, children, stickyActions = false }: {
+  headers: ReactNode[]; children: ReactNode
+  /** Freeze the last column (actions) to the right — Docker-style frozen column. */
+  stickyActions?: boolean
+}) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className={`w-full text-sm ${stickyActions ? 'sticky-actions' : ''}`}>
         <thead>
           <tr className="border-b border-slate-200 text-left">
             {headers.map((h, i) => (

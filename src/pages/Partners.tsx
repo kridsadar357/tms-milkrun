@@ -134,7 +134,7 @@ export default function Partners() {
       })()}
 
       <Card>
-        <Table
+        <Table stickyActions
           headers={[
             t('partners.code'), t('partners.name'), t('partners.contact'), t('partners.phone'),
             t('partners.email'), t('partners.trucksCount'), t('partners.creditDays'),
